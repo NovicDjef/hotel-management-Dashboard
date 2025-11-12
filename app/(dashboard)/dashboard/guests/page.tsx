@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
-import { Card, CardBody, CardHeader, Button, Input, Badge } from '../../../components/ui';
+import { Card, CardBody, CardHeader, Button, Input, Badge, Modal, ModalFooter } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchGuests, fetchGuestStats } from '@/store/slices/guestSlice';
 import {
@@ -20,6 +20,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { useClientDate } from '../../../hooks/useClientDate';
+import { guestService } from '@/lib/api/services';
 
 export default function GuestsPage() {
   const dispatch = useAppDispatch();
@@ -27,6 +28,20 @@ export default function GuestsPage() {
   const { formatDate } = useClientDate();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newGuest, setNewGuest] = useState({
+    email: '',
+    firstName: '',
+    lastName: '',
+    phone: '',
+    address: '',
+    city: '',
+    country: '',
+    dateOfBirth: '',
+    nationality: '',
+    passportNumber: '',
+  });
   const [filters, setFilters] = useState({
     search: '',
     isVIP: undefined as boolean | undefined,
@@ -41,6 +56,40 @@ export default function GuestsPage() {
 
   const handleSearch = () => {
     setFilters({ ...filters, search: searchTerm, page: 1 });
+  };
+
+  const handleCreateGuest = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!newGuest.email || !newGuest.firstName || !newGuest.lastName) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await guestService.create(newGuest);
+      setShowCreateModal(false);
+      setNewGuest({
+        email: '',
+        firstName: '',
+        lastName: '',
+        phone: '',
+        address: '',
+        city: '',
+        country: '',
+        dateOfBirth: '',
+        nationality: '',
+        passportNumber: '',
+      });
+      dispatch(fetchGuests(filters));
+      dispatch(fetchGuestStats());
+    } catch (error) {
+      console.error('Failed to create guest:', error);
+      alert('Erreur lors de la création du client');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filteredGuests = guests.filter((guest) =>
@@ -68,7 +117,11 @@ export default function GuestsPage() {
               Gérez vos clients et leur programme de fidélité
             </p>
           </div>
-          <Button variant="primary" className="w-full md:w-auto">
+          <Button
+            variant="primary"
+            className="w-full md:w-auto"
+            onClick={() => setShowCreateModal(true)}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Nouveau Client
           </Button>
@@ -359,6 +412,144 @@ export default function GuestsPage() {
             )}
           </CardBody>
         </Card>
+
+        {/* Create Guest Modal */}
+        <Modal
+          isOpen={showCreateModal}
+          onClose={() => !isSubmitting && setShowCreateModal(false)}
+          title="Nouveau Client"
+          size="lg"
+        >
+          <form onSubmit={handleCreateGuest} className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+            {/* Informations personnelles */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Informations personnelles
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Prénom *"
+                  type="text"
+                  value={newGuest.firstName}
+                  onChange={(e) => setNewGuest({ ...newGuest, firstName: e.target.value })}
+                  placeholder="Jean"
+                  required
+                  disabled={isSubmitting}
+                />
+                <Input
+                  label="Nom *"
+                  type="text"
+                  value={newGuest.lastName}
+                  onChange={(e) => setNewGuest({ ...newGuest, lastName: e.target.value })}
+                  placeholder="Dupont"
+                  required
+                  disabled={isSubmitting}
+                />
+                <Input
+                  label="Email *"
+                  type="email"
+                  value={newGuest.email}
+                  onChange={(e) => setNewGuest({ ...newGuest, email: e.target.value })}
+                  placeholder="jean.dupont@email.com"
+                  required
+                  disabled={isSubmitting}
+                />
+                <Input
+                  label="Téléphone"
+                  type="tel"
+                  value={newGuest.phone}
+                  onChange={(e) => setNewGuest({ ...newGuest, phone: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                  disabled={isSubmitting}
+                />
+                <Input
+                  label="Date de naissance"
+                  type="date"
+                  value={newGuest.dateOfBirth}
+                  onChange={(e) => setNewGuest({ ...newGuest, dateOfBirth: e.target.value })}
+                  disabled={isSubmitting}
+                />
+                <Input
+                  label="Nationalité"
+                  type="text"
+                  value={newGuest.nationality}
+                  onChange={(e) => setNewGuest({ ...newGuest, nationality: e.target.value })}
+                  placeholder="Française"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            {/* Adresse */}
+            <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Adresse
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <Input
+                    label="Adresse"
+                    type="text"
+                    value={newGuest.address}
+                    onChange={(e) => setNewGuest({ ...newGuest, address: e.target.value })}
+                    placeholder="123 rue Example"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <Input
+                  label="Ville"
+                  type="text"
+                  value={newGuest.city}
+                  onChange={(e) => setNewGuest({ ...newGuest, city: e.target.value })}
+                  placeholder="Paris"
+                  disabled={isSubmitting}
+                />
+                <Input
+                  label="Pays"
+                  type="text"
+                  value={newGuest.country}
+                  onChange={(e) => setNewGuest({ ...newGuest, country: e.target.value })}
+                  placeholder="France"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            {/* Document */}
+            <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Document d'identité
+              </h3>
+              <Input
+                label="Numéro de passeport"
+                type="text"
+                value={newGuest.passportNumber}
+                onChange={(e) => setNewGuest({ ...newGuest, passportNumber: e.target.value })}
+                placeholder="AB123456"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowCreateModal(false)}
+                disabled={isSubmitting}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isSubmitting}
+                leftIcon={<Plus className="w-4 h-4" />}
+              >
+                {isSubmitting ? 'Création...' : 'Créer le client'}
+              </Button>
+            </ModalFooter>
+          </form>
+        </Modal>
       </div>
     </DashboardLayout>
   );

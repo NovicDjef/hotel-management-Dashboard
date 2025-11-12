@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
-import { Card, CardBody, CardHeader, Button, Input, Badge } from '../../../components/ui';
+import { Card, CardBody, CardHeader, Button, Input, Badge, Modal, ModalFooter, Select } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
+  fetchSpaCategories,
   fetchSpaServices,
   fetchSpaPackages,
   fetchSpaReservations,
@@ -13,6 +14,7 @@ import {
   deleteSpaService,
   deleteSpaPackage,
   cancelSpaReservation,
+  createSpaService,
 } from '@/store/slices/spaSlice';
 import {
   Search,
@@ -35,20 +37,34 @@ type TabType = 'services' | 'packages' | 'reservations' | 'certificates';
 
 export default function SpaPage() {
   const dispatch = useAppDispatch();
-  const { services, packages, reservations, certificates, stats, isLoading, error } = useAppSelector(
+  const { categories, services, packages, reservations, certificates, stats, isLoading, error } = useAppSelector(
     (state) => state.spa
   );
   const { formatDate, isMounted } = useClientDate();
 
   const [activeTab, setActiveTab] = useState<TabType>('services');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('tous');
   const [apiAvailable, setApiAvailable] = useState(true);
+
+  // Create service modal states
+  const [showCreateServiceModal, setShowCreateServiceModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newService, setNewService] = useState({
+    nom: '',
+    description: '',
+    categorie: '',
+    durees: '',
+    prix: '',
+    bienfaits: '',
+  });
 
   useEffect(() => {
     // Charger les données avec gestion d'erreur
     const loadData = async () => {
       try {
         await Promise.all([
+          dispatch(fetchSpaCategories()).unwrap(),
           dispatch(fetchSpaServices({})).unwrap(),
           dispatch(fetchSpaPackages({})).unwrap(),
           dispatch(fetchSpaReservations({})).unwrap(),
@@ -98,27 +114,104 @@ export default function SpaPage() {
     }
   };
 
-  const filteredServices = services.filter((service) =>
-    searchTerm
-      ? service.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        service.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      : true
-  );
+  const handleCreateService = async () => {
+    setIsSubmitting(true);
+    try {
+      // Parse durees (comma-separated string to array of numbers)
+      const dureesArray = newService.durees
+        .split(',')
+        .map(d => parseInt(d.trim()))
+        .filter(d => !isNaN(d));
 
-  const filteredPackages = packages.filter((pkg) =>
-    searchTerm
-      ? pkg.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pkg.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      : true
-  );
+      // Parse prix (format: "60:100,90:150" -> {60: 100, 90: 150})
+      const prixObject: { [key: string]: number } = {};
+      newService.prix.split(',').forEach(pair => {
+        const [duration, price] = pair.split(':').map(s => s.trim());
+        if (duration && price) {
+          prixObject[duration] = parseFloat(price);
+        }
+      });
 
-  const filteredReservations = reservations.filter((reservation) =>
-    searchTerm
-      ? reservation.guestId?.toString().includes(searchTerm.toLowerCase())
-      : true
-  );
+      // Parse bienfaits (comma-separated string to array)
+      const bienfaitsArray = newService.bienfaits
+        .split(',')
+        .map(b => b.trim())
+        .filter(b => b.length > 0);
 
-  const filteredCertificates = certificates.filter((cert) =>
+      const serviceData = {
+        nom: newService.nom,
+        description: newService.description,
+        categorie: newService.categorie,
+        durees: dureesArray,
+        prix: prixObject,
+        bienfaits: bienfaitsArray,
+      };
+
+      await dispatch(createSpaService(serviceData)).unwrap();
+      alert('Service créé avec succès!');
+      setShowCreateServiceModal(false);
+      // Reset form
+      setNewService({
+        nom: '',
+        description: '',
+        categorie: '',
+        durees: '',
+        prix: '',
+        bienfaits: '',
+      });
+      // Refresh services list
+      dispatch(fetchSpaServices({}));
+      dispatch(fetchSpaStats({}));
+    } catch (error) {
+      alert('Erreur lors de la création du service');
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const filteredServices = (Array.isArray(services) ? services : []).filter((service) => {
+    const serviceName = service.nom || service.name || '';
+    const serviceDescription = service.description || '';
+    const serviceCategory = service.categorie || service.category || '';
+
+    // Filtrage par recherche
+    const matchesSearch = searchTerm
+      ? serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        serviceDescription.toLowerCase().includes(searchTerm.toLowerCase())
+      : true;
+
+    // Filtrage par catégorie
+    const matchesCategory = selectedCategory === 'tous'
+      ? true
+      : serviceCategory.toLowerCase() === selectedCategory.toLowerCase();
+
+    return matchesSearch && matchesCategory;
+  });
+
+  const filteredPackages = (Array.isArray(packages) ? packages : []).filter((pkg) => {
+    const packageName = pkg.nom || pkg.name || '';
+    const packageDescription = pkg.description || '';
+
+    return searchTerm
+      ? packageName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        packageDescription.toLowerCase().includes(searchTerm.toLowerCase())
+      : true;
+  });
+
+  const filteredReservations = (Array.isArray(reservations) ? reservations : []).filter((reservation) => {
+    const guestName = reservation.reservation?.guest?.firstName + ' ' + reservation.reservation?.guest?.lastName;
+    const serviceName = reservation.spaService?.nom || reservation.spaService?.name || '';
+    const guestEmail = reservation.reservation?.guest?.email || '';
+
+    return searchTerm
+      ? guestName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        guestEmail.toLowerCase().includes(searchTerm.toLowerCase())
+      : true;
+  });
+
+  const filteredCertificates = (Array.isArray(certificates) ? certificates : []).filter((cert) =>
     searchTerm
       ? cert.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         cert.purchasedFor?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -166,7 +259,11 @@ export default function SpaPage() {
               Gérez les services, forfaits, réservations et certificats cadeaux
             </p>
           </div>
-          <Button variant="primary" className="w-full md:w-auto">
+          <Button
+            variant="primary"
+            className="w-full md:w-auto"
+            onClick={() => activeTab === 'services' && setShowCreateServiceModal(true)}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Nouveau {activeTab === 'services' ? 'Service' : activeTab === 'packages' ? 'Forfait' : activeTab === 'reservations' ? 'Réservation' : 'Certificat'}
           </Button>
@@ -210,7 +307,7 @@ export default function SpaPage() {
                     Total Services
                   </p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    {stats?.activeServices?.toLocaleString() || services.length}
+                    {stats?.activeServices?.toLocaleString() || (Array.isArray(services) ? services.length : 0)}
                   </p>
                   <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center">
                     <TrendingUp className="w-3 h-3 mr-1" />
@@ -232,7 +329,7 @@ export default function SpaPage() {
                     Forfaits Disponibles
                   </p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    {packages.length}
+                    {Array.isArray(packages) ? packages.length : 0}
                   </p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                     Offres spéciales
@@ -253,7 +350,7 @@ export default function SpaPage() {
                     Réservations
                   </p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    {stats?.totalReservations?.toLocaleString() || reservations.length}
+                    {stats?.totalReservations?.toLocaleString() || (Array.isArray(reservations) ? reservations.length : 0)}
                   </p>
                   <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
                     Ce mois
@@ -274,7 +371,7 @@ export default function SpaPage() {
                     Certificats Vendus
                   </p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    {stats?.certificatesSold?.toLocaleString() || certificates.length}
+                    {stats?.certificatesSold?.toLocaleString() || (Array.isArray(certificates) ? certificates.length : 0)}
                   </p>
                   <p className="text-xs text-pink-600 dark:text-pink-400 mt-1">
                     Cadeaux disponibles
@@ -302,6 +399,37 @@ export default function SpaPage() {
             </div>
           </CardBody>
         </Card>
+
+        {/* Category Filter - Only show for services tab */}
+        {activeTab === 'services' && Array.isArray(categories) && categories.length > 0 && (
+          <Card>
+            <CardBody className="p-4">
+              <div className="flex items-center gap-2 overflow-x-auto">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap mr-2">
+                  Catégories:
+                </span>
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.slug)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                      selectedCategory === category.slug
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {category.name}
+                    {category.servicesCount > 0 && (
+                      <span className="ml-2 text-xs opacity-75">
+                        ({category.servicesCount})
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
@@ -386,38 +514,85 @@ export default function SpaPage() {
                         <p className="text-gray-600 dark:text-gray-400">Aucun service trouvé</p>
                       </div>
                     ) : (
-                      filteredServices.map((service) => (
+                      filteredServices.map((service) => {
+                        const serviceName = service.nom || service.name || 'Service sans nom';
+                        const serviceDescription = service.description || '';
+                        const serviceCategory = service.categorie || service.category || '';
+                        const durations = service.durees || (service.duration ? [service.duration] : []);
+                        const prices = service.prix || (service.price ? { [service.duration || '0']: service.price } : {});
+
+                        return (
                         <div
                           key={service.id}
                           className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-200"
                         >
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                             <div className="flex-1">
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                {service.name}
-                              </h3>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                {service.description}
-                              </p>
-                              <div className="flex flex-wrap gap-3">
-                                <div className="flex items-center gap-2 text-sm">
-                                  <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                  <span className="font-semibold text-green-600 dark:text-green-400">
-                                    ${service.price}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    {service.duration} min
-                                  </span>
-                                </div>
-                                {service.category && (
-                                  <Badge variant="purple" className="text-xs">
-                                    {service.category}
+                              <div className="flex items-start justify-between mb-2">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                  {serviceName}
+                                </h3>
+                                {serviceCategory && (
+                                  <Badge variant="purple" className="text-xs ml-2">
+                                    {serviceCategory}
                                   </Badge>
                                 )}
                               </div>
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                {serviceDescription}
+                              </p>
+
+                              {/* Duration and Price Options */}
+                              {durations.length > 0 && (
+                                <div className="mb-3">
+                                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                    Durées disponibles:
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {durations.map((duration) => (
+                                      <div
+                                        key={duration}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                                      >
+                                        <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                                          {duration} min
+                                        </span>
+                                        {prices[duration] && (
+                                          <>
+                                            <span className="text-gray-400">•</span>
+                                            <DollarSign className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                                            <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                                              {prices[duration]}$
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Benefits */}
+                              {service.bienfaits && service.bienfaits.length > 0 && (
+                                <div className="mb-2">
+                                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                                    Bienfaits:
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {service.bienfaits.slice(0, 3).map((benefit, idx) => (
+                                      <Badge key={idx} variant="info" className="text-xs">
+                                        {benefit}
+                                      </Badge>
+                                    ))}
+                                    {service.bienfaits.length > 3 && (
+                                      <Badge variant="default" className="text-xs">
+                                        +{service.bienfaits.length - 3}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <Button size="sm" variant="primary">
@@ -434,7 +609,8 @@ export default function SpaPage() {
                             </div>
                           </div>
                         </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}
@@ -448,37 +624,85 @@ export default function SpaPage() {
                         <p className="text-gray-600 dark:text-gray-400">Aucun forfait trouvé</p>
                       </div>
                     ) : (
-                      filteredPackages.map((pkg) => (
+                      filteredPackages.map((pkg) => {
+                        const packageName = pkg.nom || pkg.name || 'Forfait sans nom';
+                        const packageDescription = pkg.description || '';
+                        const priceIndividual = pkg.prixIndividuel || pkg.price || 0;
+                        const priceDuo = pkg.prixDuo || 0;
+                        const savingsIndividual = pkg.economieIndividuel || pkg.discount || 0;
+                        const savingsDuo = pkg.economieDuo || 0;
+                        const servicesCount = pkg.services?.length || 0;
+
+                        return (
                         <div
                           key={pkg.id}
                           className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200"
                         >
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                             <div className="flex-1">
                               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                {pkg.name}
+                                {packageName}
                               </h3>
                               <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                {pkg.description}
+                                {packageDescription}
                               </p>
-                              <div className="flex flex-wrap gap-3">
-                                <div className="flex items-center gap-2 text-sm">
-                                  <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                  <span className="font-semibold text-green-600 dark:text-green-400">
-                                    ${pkg.price}
-                                  </span>
-                                  {pkg.discount && (
-                                    <Badge variant="warning" className="text-xs">
-                                      -{pkg.discount}%
-                                    </Badge>
-                                  )}
+
+                              {/* Services inclus */}
+                              {servicesCount > 0 && (
+                                <div className="mb-3">
+                                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                    Services inclus ({servicesCount}):
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {pkg.services?.slice(0, 3).map((svc) => (
+                                      <Badge key={svc.id} variant="info" className="text-xs">
+                                        {svc.service?.nom || svc.service?.name}
+                                      </Badge>
+                                    ))}
+                                    {servicesCount > 3 && (
+                                      <Badge variant="default" className="text-xs">
+                                        +{servicesCount - 3}
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    {pkg.services?.length || 0} services
-                                  </span>
+                              )}
+
+                              {/* Pricing */}
+                              <div className="flex flex-wrap gap-4">
+                                {/* Prix Individuel */}
+                                <div className="flex flex-col">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">Individuel</p>
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                                      {priceIndividual}$
+                                    </span>
+                                    {savingsIndividual > 0 && (
+                                      <Badge variant="warning" className="text-xs">
+                                        Économie: {savingsIndividual}$
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
+
+                                {/* Prix Duo */}
+                                {priceDuo > 0 && (
+                                  <div className="flex flex-col">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Duo</p>
+                                    <div className="flex items-center gap-2">
+                                      <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                      <span className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                                        {priceDuo}$
+                                      </span>
+                                      {savingsDuo > 0 && (
+                                        <Badge variant="warning" className="text-xs">
+                                          Économie: {savingsDuo}$
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -496,7 +720,8 @@ export default function SpaPage() {
                             </div>
                           </div>
                         </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}
@@ -510,36 +735,70 @@ export default function SpaPage() {
                         <p className="text-gray-600 dark:text-gray-400">Aucune réservation trouvée</p>
                       </div>
                     ) : (
-                      filteredReservations.map((reservation) => (
+                      filteredReservations.map((reservation) => {
+                        const guest = reservation.reservation?.guest;
+                        const guestName = guest ? `${guest.firstName} ${guest.lastName}` : 'Client inconnu';
+                        const serviceName = reservation.spaService?.nom || reservation.spaService?.name || 'Service inconnu';
+                        const duration = reservation.duree || reservation.duration || 0;
+                        const price = reservation.prix || reservation.totalAmount || 0;
+                        const time = reservation.heure || reservation.time || '';
+                        const nombrePersonnes = reservation.nombrePersonnes || 1;
+
+                        return (
                         <div
                           key={reservation.id}
                           className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-600 transition-all duration-200"
                         >
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                             <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-3">
+                              <div className="flex items-center gap-3 mb-2">
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                  Client #{reservation.guestId}
+                                  {guestName}
                                 </h3>
                                 <Badge variant={getReservationStatusColor(reservation.status)} className="text-xs">
                                   {reservation.status}
                                 </Badge>
                               </div>
+
+                              {/* Service info */}
+                              <div className="mb-3">
+                                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                  {serviceName}
+                                </p>
+                                {guest?.email && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {guest.email} • {guest.phone}
+                                  </p>
+                                )}
+                              </div>
+
                               <div className="flex flex-wrap gap-3 text-sm">
                                 <div className="flex items-center gap-2">
                                   <Calendar className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                                   <span className="text-gray-700 dark:text-gray-300">
-                                    {isMounted ? formatDate(reservation.date) : reservation.date} à {reservation.time}
+                                    {isMounted ? formatDate(reservation.date) : reservation.date} à {time}
                                   </span>
                                 </div>
-                                {reservation.totalAmount && (
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                  <span className="text-gray-700 dark:text-gray-300">
+                                    {duration} min
+                                  </span>
+                                </div>
+                                {nombrePersonnes > 1 && (
                                   <div className="flex items-center gap-2">
-                                    <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                    <span className="font-semibold text-green-600 dark:text-green-400">
-                                      ${reservation.totalAmount}
+                                    <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                    <span className="text-gray-700 dark:text-gray-300">
+                                      {nombrePersonnes} personne{nombrePersonnes > 1 ? 's' : ''}
                                     </span>
                                   </div>
                                 )}
+                                <div className="flex items-center gap-2">
+                                  <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                  <span className="font-semibold text-green-600 dark:text-green-400">
+                                    {price}$
+                                  </span>
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -560,7 +819,8 @@ export default function SpaPage() {
                             </div>
                           </div>
                         </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}
@@ -634,6 +894,127 @@ export default function SpaPage() {
             )}
           </CardBody>
         </Card>
+
+        {/* Create Service Modal */}
+        <Modal
+          isOpen={showCreateServiceModal}
+          onClose={() => setShowCreateServiceModal(false)}
+          title="Nouveau Service Spa"
+          size="lg"
+        >
+          <form className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+            {/* Service Information Section */}
+            <div>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                Informations du Service
+              </h4>
+              <div className="space-y-4">
+                <Input
+                  label="Nom du Service"
+                  value={newService.nom}
+                  onChange={(e) => setNewService({ ...newService, nom: e.target.value })}
+                  placeholder="Ex: Massage Relaxant"
+                  required
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={newService.description}
+                    onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                    placeholder="Décrivez le service..."
+                    rows={3}
+                    className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <Select
+                  label="Catégorie"
+                  value={newService.categorie}
+                  onChange={(e) => setNewService({ ...newService, categorie: e.target.value })}
+                  options={[
+                    { value: '', label: 'Sélectionnez une catégorie' },
+                    { value: 'massage', label: 'Massage' },
+                    { value: 'soin-visage', label: 'Soin Visage' },
+                    { value: 'soin-corps', label: 'Soin Corps' },
+                    { value: 'rituel', label: 'Rituel' },
+                    { value: 'beaute', label: 'Beauté' },
+                  ]}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Duration and Pricing Section */}
+            <div>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                Durées et Prix
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <Input
+                    label="Durées disponibles (minutes)"
+                    value={newService.durees}
+                    onChange={(e) => setNewService({ ...newService, durees: e.target.value })}
+                    placeholder="Ex: 60,90,120"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Séparez les durées par des virgules
+                  </p>
+                </div>
+                <div>
+                  <Input
+                    label="Prix par durée"
+                    value={newService.prix}
+                    onChange={(e) => setNewService({ ...newService, prix: e.target.value })}
+                    placeholder="Ex: 60:100,90:150,120:200"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Format: durée:prix (Ex: 60:100 pour 100$ pour 60 minutes)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Benefits Section */}
+            <div>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                Bienfaits
+              </h4>
+              <div>
+                <Input
+                  label="Bienfaits du Service"
+                  value={newService.bienfaits}
+                  onChange={(e) => setNewService({ ...newService, bienfaits: e.target.value })}
+                  placeholder="Ex: Relaxation,Détente musculaire,Amélioration circulation"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Séparez les bienfaits par des virgules
+                </p>
+              </div>
+            </div>
+          </form>
+
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateServiceModal(false)}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateService}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Création...' : 'Créer le Service'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       </div>
     </DashboardLayout>
   );

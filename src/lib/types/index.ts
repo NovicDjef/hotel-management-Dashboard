@@ -21,10 +21,12 @@ export enum RoomStatus {
 }
 
 export enum RoomType {
-  STANDARD = 'STANDARD',
-  DELUXE = 'DELUXE',
+  SINGLE = 'SINGLE',
+  DOUBLE = 'DOUBLE',
   SUITE = 'SUITE',
-  EXECUTIVE = 'EXECUTIVE'
+  EXECUTIVE = 'EXECUTIVE',
+  STANDARD = 'STANDARD',
+  DELUXE = 'DELUXE'
 }
 
 export enum ReservationStatus {
@@ -170,17 +172,26 @@ export interface Hotel {
 export interface RoomTypeInventory {
   id: string;
   hotelId: string;
-  type: RoomType;
+  roomType: RoomType; // Nom du champ dans l'API
+  totalRooms: number;
   name: string;
   description?: string;
   basePrice: number;
+  weekendPrice: number;
   capacity: number;
-  amenities: string[];
+  size: number; // en m²
+  bedType: string;
+  amenities: Record<string, boolean>; // Objet JSON avec clés boolean
   images?: string[];
-  totalRooms: number;
-  availableRooms: number;
   createdAt: string;
   updatedAt: string;
+
+  // Champs calculés optionnels
+  availableRooms?: number;
+  occupiedRooms?: number;
+
+  // Rétrocompatibilité
+  type?: RoomType; // Alias pour roomType
 }
 
 export interface Room {
@@ -384,45 +395,110 @@ export interface TaskStats {
 // SPA TYPES
 // ============================================
 
-export interface SpaService {
+export enum SpaCategory {
+  MASSAGE = 'MASSAGE',
+  SPA = 'SPA',
+  SOINS = 'SOINS'
+}
+
+export interface SpaCategoryData {
   id: string;
   name: string;
+  slug: string;
+  servicesCount: number;
+}
+
+export interface SpaService {
+  id: string;
+  nom: string;
   description?: string;
-  duration: number; // in minutes
-  price: number;
-  category: string;
+  descriptionLongue?: string;
+  categorie: SpaCategory;
+  durees: number[]; // [45, 60, 90]
+  prix: Record<string, number>; // { "45": 65, "60": 85, "90": 120 }
+  bienfaits: string[];
+  inclus: string[];
+  image?: string;
   isActive: boolean;
-  images?: string[];
   createdAt: string;
   updatedAt: string;
+
+  // Rétrocompatibilité
+  name?: string;
+  duration?: number;
+  price?: number;
+  category?: string;
+  images?: string[];
+}
+
+export interface SpaPackageService {
+  id: string;
+  forfaitId: string;
+  serviceId: string;
+  createdAt: string;
+  service: SpaService;
 }
 
 export interface SpaPackage {
   id: string;
-  name: string;
+  hotelId: string;
+  nom: string;
   description?: string;
-  services: string[]; // service IDs
-  price: number;
-  discount?: number;
+  prixIndividuel: number;
+  prixDuo: number;
+  economieIndividuel: number;
+  economieDuo: number;
   isActive: boolean;
-  images?: string[];
   createdAt: string;
   updatedAt: string;
+  services: SpaPackageService[];
+
+  // Rétrocompatibilité
+  name?: string;
+  price?: number;
+  discount?: number;
+  images?: string[];
 }
 
 export interface SpaReservation {
   id: string;
-  guestId: string;
-  serviceId?: string;
-  packageId?: string;
+  reservationId: string;
+  spaServiceId: string;
+  duree: number;
+  prix: number;
+  nombrePersonnes: number;
   date: string;
-  time: string;
-  duration: number;
+  heure: string;
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
-  totalAmount: number;
-  notes?: string;
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  spaService?: SpaService;
+  reservation?: {
+    id: string;
+    hotelId: string;
+    guestId: string;
+    roomType: string;
+    checkInDate: string;
+    checkOutDate: string;
+    status: string;
+    paymentStatus: string;
+    guest?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+    };
+  };
+
+  // Rétrocompatibilité
+  guestId?: string;
+  serviceId?: string;
+  packageId?: string;
+  time?: string;
+  duration?: number;
+  totalAmount?: number;
   guest?: Guest;
   service?: SpaService;
   package?: SpaPackage;

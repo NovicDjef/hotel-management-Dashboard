@@ -11,6 +11,7 @@ import {
   Users,
   UserCog,
   ClipboardList,
+  MessageSquare,
   Sparkles,
   CreditCard,
   FileText,
@@ -54,6 +55,11 @@ const menuItems = [
     label: 'Tasks',
     icon: ClipboardList,
     href: '/dashboard/tasks',
+  },
+  {
+    label: 'Chat',
+    icon: MessageSquare,
+    href: '/dashboard/chat',
   },
   {
     label: 'Spa',

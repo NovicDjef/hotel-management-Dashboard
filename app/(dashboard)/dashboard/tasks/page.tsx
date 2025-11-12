@@ -15,11 +15,14 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  Modal,
+  ModalFooter,
+  Input,
 } from '../../../components/ui';
 import { Plus, Play, Check, X, ClipboardList } from 'lucide-react';
-import { taskService } from '@/lib/api/services';
-import type { Task, TaskStatus, TaskPriority } from '@/lib/types';
-import { format } from 'date-fns';
+import { taskService, roomService, staffService } from '@/lib/api/services';
+import type { Task, TaskStatus, TaskPriority, RoomTypeInventory, Staff } from '@/lib/types';
+import { useClientDate } from '../../../hooks/useClientDate';
 
 const getStatusBadge = (status: TaskStatus) => {
   const variants = {
@@ -52,6 +55,7 @@ const getPriorityBadge = (priority: TaskPriority) => {
 };
 
 export default function TasksPage() {
+  const { formatDate } = useClientDate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -67,9 +71,43 @@ export default function TasksPage() {
     totalPages: 0,
   });
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    type: 'CLEANING',
+    priority: 'MEDIUM',
+    roomId: '',
+    assignedToId: '',
+    dueDate: '',
+    scheduledDate: '',
+  });
+
   useEffect(() => {
     loadTasks();
   }, [filters]);
+
+  useEffect(() => {
+    if (showCreateModal) {
+      loadRoomsAndStaff();
+    }
+  }, [showCreateModal]);
+
+  const loadRoomsAndStaff = async () => {
+    try {
+      const [roomsData, staffData] = await Promise.all([
+        roomService.getAll({ page: 1, limit: 100 }),
+        staffService.getAll({ page: 1, limit: 100 }),
+      ]);
+      setRooms(roomsData.data || []);
+      setStaffMembers(staffData.data || []);
+    } catch (error) {
+      console.error('Failed to load rooms and staff:', error);
+    }
+  };
 
   const loadTasks = async () => {
     try {
@@ -116,6 +154,50 @@ export default function TasksPage() {
     }
   };
 
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!newTask.title || !newTask.type || !newTask.priority) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const taskData: any = {
+        title: newTask.title,
+        description: newTask.description,
+        type: newTask.type,
+        priority: newTask.priority,
+      };
+
+      if (newTask.roomId) taskData.roomId = newTask.roomId;
+      if (newTask.assignedToId) taskData.assignedToId = newTask.assignedToId;
+      if (newTask.dueDate) taskData.dueDate = new Date(newTask.dueDate).toISOString();
+      if (newTask.scheduledDate) taskData.scheduledDate = new Date(newTask.scheduledDate).toISOString();
+
+      await taskService.create(taskData);
+
+      setShowCreateModal(false);
+      setNewTask({
+        title: '',
+        description: '',
+        type: 'CLEANING',
+        priority: 'MEDIUM',
+        roomId: '',
+        assignedToId: '',
+        dueDate: '',
+        scheduledDate: '',
+      });
+      loadTasks();
+    } catch (error) {
+      console.error('Failed to create task:', error);
+      alert('Erreur lors de la création de la tâche');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -128,7 +210,12 @@ export default function TasksPage() {
               Manage maintenance and cleaning tasks
             </p>
           </div>
-          <Button leftIcon={<Plus className="w-4 h-4" />}>Create Task</Button>
+          <Button
+            leftIcon={<Plus className="w-4 h-4" />}
+            onClick={() => setShowCreateModal(true)}
+          >
+            Create Task
+          </Button>
         </div>
 
         <Card>
@@ -233,7 +320,7 @@ export default function TasksPage() {
                       </TableCell>
                       <TableCell>
                         {task.dueDate
-                          ? format(new Date(task.dueDate), 'MMM dd, yyyy')
+                          ? formatDate(task.dueDate, 'MMM dd, yyyy')
                           : 'N/A'}
                       </TableCell>
                       <TableCell>{getStatusBadge(task.status)}</TableCell>
@@ -310,6 +397,167 @@ export default function TasksPage() {
             </div>
           )}
         </Card>
+
+        {/* Create Task Modal */}
+        <Modal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          title="Créer une nouvelle tâche"
+          size="lg"
+        >
+          <form onSubmit={handleCreateTask} className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+            {/* Informations de base */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Informations de base
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                <Input
+                  label="Titre *"
+                  value={newTask.title}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, title: e.target.value })
+                  }
+                  placeholder="Ex: Nettoyage chambre 101"
+                  required
+                />
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={newTask.description}
+                    onChange={(e) =>
+                      setNewTask({ ...newTask, description: e.target.value })
+                    }
+                    placeholder="Décrivez la tâche en détail..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Type et priorité */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Type et priorité
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Type *"
+                  value={newTask.type}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, type: e.target.value })
+                  }
+                  options={[
+                    { value: 'CLEANING', label: 'Nettoyage' },
+                    { value: 'MAINTENANCE', label: 'Maintenance' },
+                    { value: 'INSPECTION', label: 'Inspection' },
+                    { value: 'OTHER', label: 'Autre' },
+                  ]}
+                  required
+                />
+
+                <Select
+                  label="Priorité *"
+                  value={newTask.priority}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, priority: e.target.value })
+                  }
+                  options={[
+                    { value: 'LOW', label: 'Basse' },
+                    { value: 'MEDIUM', label: 'Moyenne' },
+                    { value: 'HIGH', label: 'Haute' },
+                    { value: 'URGENT', label: 'Urgente' },
+                  ]}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Assignation */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Assignation
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Chambre"
+                  value={newTask.roomId}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, roomId: e.target.value })
+                  }
+                  options={[
+                    { value: '', label: 'Aucune chambre' },
+                    ...rooms.map((room: any) => ({
+                      value: room.id,
+                      label: `${room.roomNumber} - ${room.roomType?.name || room.type}`,
+                    })),
+                  ]}
+                />
+
+                <Select
+                  label="Assigné à"
+                  value={newTask.assignedToId}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, assignedToId: e.target.value })
+                  }
+                  options={[
+                    { value: '', label: 'Non assigné' },
+                    ...staffMembers.map((staff: any) => ({
+                      value: staff.id,
+                      label: `${staff.firstName} ${staff.lastName} - ${staff.role}`,
+                    })),
+                  ]}
+                />
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Planification
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Date planifiée"
+                  type="datetime-local"
+                  value={newTask.scheduledDate}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, scheduledDate: e.target.value })
+                  }
+                />
+
+                <Input
+                  label="Date d'échéance"
+                  type="datetime-local"
+                  value={newTask.dueDate}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, dueDate: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+          </form>
+
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateModal(false)}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleCreateTask}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Création...' : 'Créer la tâche'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       </div>
     </DashboardLayout>
   );

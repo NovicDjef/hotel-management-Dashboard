@@ -175,7 +175,8 @@ export const reservationService = {
 
 export const roomService = {
   getAll: async (params?: any) => {
-    const response = await apiService.get('/rooms', { params });
+    const response = await apiService.get(`/room-types/hotels/${hotelId}`, { params });
+    console.log('Response from getAll rooms:', response);
     return response.data;
   },
 
@@ -246,6 +247,22 @@ export const roomService = {
   getRoomType: (roomType: string, hotelIdParam?: string) => {
     const id = hotelIdParam || hotelId;
     return apiService.get(`/room-types/hotels/${id}/${roomType}`);
+  },
+
+  // Vérifier disponibilité par date (avec décompte par type)
+  checkAvailabilityByDate: async (params: {
+    hotelId?: string;
+    checkInDate: string;
+    checkOutDate: string;
+  }) => {
+    const response = await apiService.get('/rooms/availability/by-date', {
+      params: {
+        hotelId: params.hotelId || hotelId,
+        checkInDate: params.checkInDate,
+        checkOutDate: params.checkOutDate,
+      },
+    });
+    return response.data;
   },
 };
 
@@ -389,6 +406,13 @@ export const taskService = {
 // ==================== SPA ====================
 
 export const spaService = {
+  // ==================== CATÉGORIES SPA ====================
+
+  getAllCategories: async () => {
+    const response = await apiService.get('/reservations/spa-categories');
+    return response.data;
+  },
+
   // ==================== SERVICES SPA ====================
 
   // Services (publiques)
@@ -450,22 +474,22 @@ export const spaService = {
   // ==================== RÉSERVATIONS SPA ====================
 
   getAllReservations: async (params?: any) => {
-    const response = await apiService.get('/spa/reservations', { params });
+    const response = await apiService.get('/reservations/all-spa-reservations', { params });
     return response.data;
   },
 
   getReservationById: async (id: string) => {
-    const response = await apiService.get(`/spa/reservations/${id}`);
+    const response = await apiService.get(`/reservations/spa-reservations/${id}`);
     return response.data;
   },
 
   createReservation: async (data: any) => {
-    const response = await apiService.post('/spa/reservations', data);
+    const response = await apiService.post('/reservations/spa-reservations', data);
     return response.data;
   },
 
   updateReservation: async (id: string, data: any) => {
-    const response = await apiService.put(`/spa/reservations/${id}`, data);
+    const response = await apiService.put(`/reservations/spa-reservations/${id}`, data);
     return response.data;
   },
 
@@ -489,7 +513,7 @@ export const spaService = {
 
   // Certificats (admin)
   getAllCertificates: async (params?: any) => {
-    const response = await apiService.get('/spa/certificats', { params });
+    const response = await apiService.get('/spa/certificats/amounts', { params });
     return response.data;
   },
 
@@ -522,6 +546,112 @@ export const spaService = {
 
   getStatistics: async (params?: any) => {
     const response = await apiService.get('/spa/statistics', { params });
+    return response.data;
+  },
+};
+
+// ==================== CHAT ====================
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  message: string;
+  senderType: 'GUEST' | 'STAFF';
+  senderName: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  hotelId: string;
+  guestId?: string;
+  guestName: string;
+  guestEmail?: string;
+  guestPhone?: string;
+  status: 'OPEN' | 'CLOSED' | 'PENDING';
+  assignedToId?: string;
+  assignedTo?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+  lastMessage?: string;
+  lastMessageAt?: string;
+  unreadCount?: number;
+  createdAt: string;
+  updatedAt: string;
+  messages?: ChatMessage[];
+}
+
+export interface ConversationFilters {
+  status?: string;
+  assignedToId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export const chatService = {
+  // Get all conversations (Staff)
+  getConversations: async (filters?: ConversationFilters) => {
+    const response = await apiService.get('/chat/conversations', { params: filters });
+    return response.data;
+  },
+
+  // Get single conversation
+  getConversation: async (id: string) => {
+    const response = await apiService.get(`/chat/conversations/${id}`);
+    return response.data;
+  },
+
+  // Get messages for a conversation
+  getMessages: async (conversationId: string) => {
+    const response = await apiService.get(`/chat/${conversationId}/messages`);
+    return response.data;
+  },
+
+  // Send message (Staff)
+  sendMessage: async (conversationId: string, message: string, senderName: string) => {
+    const response = await apiService.post(`/chat/${conversationId}/messages`, {
+      message,
+      senderType: 'STAFF',
+      senderName,
+    });
+    return response.data;
+  },
+
+  // Change conversation status
+  updateStatus: async (id: string, status: 'OPEN' | 'CLOSED' | 'PENDING') => {
+    const response = await apiService.patch(`/chat/conversations/${id}/status`, {
+      status,
+    });
+    return response.data;
+  },
+
+  // Assign conversation to staff
+  assignToStaff: async (id: string, staffId: string) => {
+    const response = await apiService.patch(`/chat/conversations/${id}/assign`, {
+      staffId,
+    });
+    return response.data;
+  },
+
+  // Mark conversation as read
+  markAsRead: async (id: string) => {
+    const response = await apiService.patch(`/chat/conversations/${id}/mark-read`);
+    return response.data;
+  },
+
+  // Start new conversation (Public - for widget)
+  startConversation: async (data: {
+    hotelId: string;
+    guestName: string;
+    guestEmail?: string;
+    guestPhone?: string;
+    initialMessage: string;
+  }) => {
+    const response = await apiService.post('/chat/start', data);
     return response.data;
   },
 };
@@ -696,6 +826,165 @@ export const sendContactMessage = (data: {
   return apiService.post('/contact', data);
 };
 
+// ==================== SETTINGS ====================
+
+export interface HotelSettings {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  country: string;
+  postalCode: string;
+  website?: string;
+  description?: string;
+  stars: string;
+  logo?: string;
+}
+
+export interface ReservationPolicySettings {
+  checkInTime: string;
+  checkOutTime: string;
+  minAdvanceBooking: number;
+  maxAdvanceBooking: number;
+  cancellationDeadline: number;
+  requireDeposit: boolean;
+  depositPercentage: number;
+  autoConfirm: boolean;
+}
+
+export interface PaymentSettings {
+  currency: string;
+  taxRate: number;
+  acceptCreditCard: boolean;
+  acceptDebitCard: boolean;
+  acceptCash: boolean;
+  acceptPaypal: boolean;
+  stripePublicKey?: string;
+  stripeSecretKey?: string;
+}
+
+export interface NotificationSettings {
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  bookingConfirmation: boolean;
+  paymentConfirmation: boolean;
+  cancellationNotice: boolean;
+  reminderBeforeCheckIn: boolean;
+  reminderDays: number;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  smtpPassword?: string;
+}
+
+export interface SecuritySettings {
+  passwordMinLength: number;
+  requireUppercase: boolean;
+  requireNumber: boolean;
+  requireSpecialChar: boolean;
+  sessionTimeout: number;
+  maxLoginAttempts: number;
+  twoFactorAuth: boolean;
+  ipWhitelist?: string;
+}
+
+export interface AppearanceSettings {
+  defaultLanguage: string;
+  dateFormat: string;
+  timeFormat: string;
+  primaryColor: string;
+  secondaryColor: string;
+  logo?: string;
+  favicon?: string;
+}
+
+export interface IntegrationSettings {
+  googleMapsApiKey?: string;
+  twilioAccountSid?: string;
+  twilioAuthToken?: string;
+  sendGridApiKey?: string;
+  reservationWebhook?: string;
+  paymentWebhook?: string;
+}
+
+export interface SystemSettings {
+  hotel?: HotelSettings;
+  reservationPolicy?: ReservationPolicySettings;
+  payment?: PaymentSettings;
+  notifications?: NotificationSettings;
+  security?: SecuritySettings;
+  appearance?: AppearanceSettings;
+  integrations?: IntegrationSettings;
+}
+
+export const settingsService = {
+  getAll: async () => {
+    const response = await apiService.get('/settings');
+    return response.data;
+  },
+
+  updateAll: async (settings: SystemSettings) => {
+    const response = await apiService.put('/settings', settings);
+    return response.data;
+  },
+
+  reset: async () => {
+    const response = await apiService.post('/settings/reset');
+    return response.data;
+  },
+
+  getReservationPolicy: async () => {
+    const response = await apiService.get('/settings/reservation-policy');
+    return response.data;
+  },
+
+  updateReservationPolicy: async (policy: ReservationPolicySettings) => {
+    const response = await apiService.put('/settings/reservation-policy', policy);
+    return response.data;
+  },
+
+  getPayment: async () => {
+    const response = await apiService.get('/settings/payment');
+    return response.data;
+  },
+
+  updatePayment: async (payment: PaymentSettings) => {
+    const response = await apiService.put('/settings/payment', payment);
+    return response.data;
+  },
+
+  getNotifications: async () => {
+    const response = await apiService.get('/settings/notifications');
+    return response.data;
+  },
+
+  updateNotifications: async (notifications: NotificationSettings) => {
+    const response = await apiService.put('/settings/notifications', notifications);
+    return response.data;
+  },
+
+  getSecurity: async () => {
+    const response = await apiService.get('/settings/security');
+    return response.data;
+  },
+
+  updateSecurity: async (security: SecuritySettings) => {
+    const response = await apiService.put('/settings/security', security);
+    return response.data;
+  },
+
+  updateAppearance: async (appearance: AppearanceSettings) => {
+    const response = await apiService.put('/settings/appearance', appearance);
+    return response.data;
+  },
+
+  updateIntegrations: async (integrations: IntegrationSettings) => {
+    const response = await apiService.put('/settings/integrations', integrations);
+    return response.data;
+  },
+};
+
 // Export tout
 export default {
   auth: authService,
@@ -706,6 +995,8 @@ export default {
   staff: staffService,
   tasks: taskService,
   spa: spaService,
+  chat: chatService,
+  settings: settingsService,
   reviews: reviewService,
   payments: paymentService,
   invoices: invoiceService,

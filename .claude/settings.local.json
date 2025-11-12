@@ -8,7 +8,11 @@
       "Bash(curl:*)",
       "Bash(kill:*)",
       "Bash(pkill:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(npm run dev:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
-import { Card, CardBody, CardHeader, Button, Input, Badge } from '../../../components/ui';
+import { Card, CardBody, CardHeader, Button, Input, Badge, Modal, ModalFooter, Select } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchStaff, fetchStaffStats } from '@/store/slices/staffSlice';
+import { staffService } from '@/lib/api/services';
 import {
   Search,
   Plus,
@@ -34,6 +35,20 @@ export default function StaffPage() {
     limit: 10,
   });
 
+  // Create modal states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newStaff, setNewStaff] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'RECEPTIONIST',
+    department: '',
+    shift: 'MORNING',
+    salary: 0,
+  });
+
   useEffect(() => {
     dispatch(fetchStaff(filters));
     dispatch(fetchStaffStats());
@@ -41,6 +56,34 @@ export default function StaffPage() {
 
   const handleSearch = () => {
     setFilters({ ...filters, search: searchTerm, page: 1 });
+  };
+
+  const handleCreateStaff = async () => {
+    setIsSubmitting(true);
+    try {
+      await staffService.create(newStaff);
+      alert('Staff member created successfully!');
+      setShowCreateModal(false);
+      // Reset form
+      setNewStaff({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        role: 'RECEPTIONIST',
+        department: '',
+        shift: 'MORNING',
+        salary: 0,
+      });
+      // Refresh staff list
+      dispatch(fetchStaff(filters));
+      dispatch(fetchStaffStats());
+    } catch (error) {
+      alert('Error creating staff member');
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filteredStaff = staffMembers.filter((staff) =>
@@ -98,7 +141,7 @@ export default function StaffPage() {
               Gérez votre équipe et leurs rôles
             </p>
           </div>
-          <Button variant="primary" className="w-full md:w-auto">
+          <Button variant="primary" className="w-full md:w-auto" onClick={() => setShowCreateModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Nouveau Membre
           </Button>
@@ -411,6 +454,119 @@ export default function StaffPage() {
             )}
           </CardBody>
         </Card>
+
+        {/* Create Staff Modal */}
+        <Modal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          title="Nouveau Membre du Personnel"
+          size="lg"
+        >
+          <form className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+            {/* Personal Information Section */}
+            <div>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                Informations Personnelles
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Prénom"
+                  value={newStaff.firstName}
+                  onChange={(e) => setNewStaff({ ...newStaff, firstName: e.target.value })}
+                  placeholder="Entrez le prénom"
+                  required
+                />
+                <Input
+                  label="Nom"
+                  value={newStaff.lastName}
+                  onChange={(e) => setNewStaff({ ...newStaff, lastName: e.target.value })}
+                  placeholder="Entrez le nom"
+                  required
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  value={newStaff.email}
+                  onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
+                  placeholder="email@example.com"
+                  required
+                />
+                <Input
+                  label="Téléphone"
+                  type="tel"
+                  value={newStaff.phone}
+                  onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
+                  placeholder="+1 234 567 8900"
+                />
+              </div>
+            </div>
+
+            {/* Job Information Section */}
+            <div>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                Informations Professionnelles
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Rôle"
+                  value={newStaff.role}
+                  onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
+                  options={[
+                    { value: 'MANAGER', label: 'Manager' },
+                    { value: 'RECEPTIONIST', label: 'Réceptionniste' },
+                    { value: 'HOUSEKEEPING', label: 'Femme de Ménage' },
+                    { value: 'MAINTENANCE', label: 'Maintenance' },
+                    { value: 'CONCIERGE', label: 'Concierge' },
+                  ]}
+                  required
+                />
+                <Input
+                  label="Département"
+                  value={newStaff.department}
+                  onChange={(e) => setNewStaff({ ...newStaff, department: e.target.value })}
+                  placeholder="Ex: Réception, Housekeeping"
+                />
+                <Select
+                  label="Shift"
+                  value={newStaff.shift}
+                  onChange={(e) => setNewStaff({ ...newStaff, shift: e.target.value })}
+                  options={[
+                    { value: 'MORNING', label: 'Matin (6h-14h)' },
+                    { value: 'AFTERNOON', label: 'Après-midi (14h-22h)' },
+                    { value: 'NIGHT', label: 'Nuit (22h-6h)' },
+                  ]}
+                  required
+                />
+                <Input
+                  label="Salaire"
+                  type="number"
+                  value={newStaff.salary}
+                  onChange={(e) => setNewStaff({ ...newStaff, salary: parseFloat(e.target.value) || 0 })}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </div>
+          </form>
+
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateModal(false)}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateStaff}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Création...' : 'Créer le Membre'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       </div>
     </DashboardLayout>
   );

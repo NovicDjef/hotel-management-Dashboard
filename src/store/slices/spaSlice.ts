@@ -1,8 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import type { SpaService, SpaPackage, SpaReservation, SpaCertificate, SpaStats } from '@/lib/types';
+import type { SpaService, SpaPackage, SpaReservation, SpaCertificate, SpaStats, SpaCategoryData } from '@/lib/types';
 import { spaService } from '@/lib/api/services';
 
 interface SpaState {
+  // Catégories
+  categories: SpaCategoryData[];
+
   // Services
   services: SpaService[];
   selectedService: SpaService | null;
@@ -29,6 +32,7 @@ interface SpaState {
 }
 
 const initialState: SpaState = {
+  categories: [],
   services: [],
   selectedService: null,
   packages: [],
@@ -43,6 +47,24 @@ const initialState: SpaState = {
   error: null,
 };
 
+// ==================== CATÉGORIES ====================
+
+export const fetchSpaCategories = createAsyncThunk(
+  'spa/fetchCategories',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await spaService.getAllCategories();
+      // Gérer différents formats de réponse API
+      if (Array.isArray(response)) {
+        return response;
+      }
+      return response?.data || response?.categories || [];
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch categories');
+    }
+  }
+);
+
 // ==================== SERVICES ====================
 
 export const fetchSpaServices = createAsyncThunk(
@@ -50,7 +72,11 @@ export const fetchSpaServices = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllServices(params);
-      return response || [];
+      // Gérer différents formats de réponse API
+      if (Array.isArray(response)) {
+        return response;
+      }
+      return response?.data || response?.services || [];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch services');
     }
@@ -100,7 +126,11 @@ export const fetchSpaPackages = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllPackages(params);
-      return response || [];
+      // Gérer différents formats de réponse API
+      if (Array.isArray(response)) {
+        return response;
+      }
+      return response?.data || response?.packages || [];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch packages');
     }
@@ -150,7 +180,11 @@ export const fetchSpaReservations = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllReservations(params);
-      return response || [];
+      // Gérer différents formats de réponse API
+      if (Array.isArray(response)) {
+        return response;
+      }
+      return response?.data || response?.reservations || [];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch reservations');
     }
@@ -212,7 +246,11 @@ export const fetchSpaCertificates = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllCertificates(params);
-      return response || [];
+      // Gérer différents formats de réponse API
+      if (Array.isArray(response)) {
+        return response;
+      }
+      return response?.data || response?.certificates || [];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch certificates');
     }
@@ -224,7 +262,11 @@ export const fetchAvailableAmounts = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await spaService.getAvailableAmounts();
-      return response || [];
+      // Gérer différents formats de réponse API
+      if (Array.isArray(response)) {
+        return response;
+      }
+      return response?.data || response?.amounts || [];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch available amounts');
     }
@@ -316,6 +358,21 @@ const spaSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    // ==================== CATÉGORIES ====================
+    builder
+      .addCase(fetchSpaCategories.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchSpaCategories.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.categories = action.payload;
+      })
+      .addCase(fetchSpaCategories.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
+
     // ==================== SERVICES ====================
     builder
       .addCase(fetchSpaServices.pending, (state) => {

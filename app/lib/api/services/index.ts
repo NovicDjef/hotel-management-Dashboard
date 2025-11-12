@@ -5,3 +5,5 @@ export { roomService } from './room.service';
 export { guestService } from './guest.service';
 export { staffService } from './staff.service';
 export { taskService } from './task.service';
+export { chatService } from './chat.service';
+export { settingsService } from './settings.service';
