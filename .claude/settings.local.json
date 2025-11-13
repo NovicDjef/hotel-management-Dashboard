@@ -12,7 +12,8 @@
       "Bash(wc:*)",
       "Bash(npm run dev:*)",
       "Bash(grep:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(lsof:*)"
     ],
     "deny": [],
     "ask": []

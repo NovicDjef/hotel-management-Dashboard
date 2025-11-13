@@ -29,11 +29,15 @@ import {
   Calendar,
   Download,
   Edit,
+  Printer,
 } from 'lucide-react';
 import { reservationService, roomService } from '@/lib/api/services';
 import type { Reservation, ReservationStatus, RoomTypeInventory } from '@/lib/types';
 import { format } from 'date-fns';
 import { useClientDate } from '@/hooks/useClientDate';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 
 const getStatusBadge = (status: ReservationStatus) => {
   const variants = {
@@ -58,6 +62,10 @@ const getTotalAmount = (reservation: Reservation) => {
 
 // Helper pour obtenir le montant payé
 const getPaidAmount = (reservation: Reservation) => {
+  // Si le statut est CONFIRMED, cela signifie que tout est payé
+  if (reservation.status === 'CONFIRMED') {
+    return getTotalAmount(reservation);
+  }
   return reservation.paidAmount || 0;
 };
 
@@ -241,14 +249,9 @@ export default function ReservationsPage() {
     }
   };
 
-  const handleViewDetails = async (reservation: Reservation) => {
-    try {
-      const details = await reservationService.getById(reservation.id);
-      setSelectedReservation(details || null);
-      setShowDetailsModal(true);
-    } catch (error) {
-      console.error('Failed to load reservation details:', error);
-    }
+  const handleViewDetails = (reservation: Reservation) => {
+    setSelectedReservation(reservation);
+    setShowDetailsModal(true);
   };
 
   const handleOpenCreateModal = () => {
@@ -467,6 +470,269 @@ export default function ReservationsPage() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      // Récupérer toutes les réservations sans pagination
+      const response = await reservationService.getAll({
+        page: 1,
+        limit: 10000, // Grande limite pour récupérer toutes les données
+      });
+
+      const allReservations = response.data || [];
+
+      if (allReservations.length === 0) {
+        alert('Aucune réservation à exporter');
+        return;
+      }
+
+      // Préparer les données pour Excel
+      const excelData = allReservations.map((reservation) => {
+        const totalAmount = getTotalAmount(reservation);
+        const paidAmount = getPaidAmount(reservation);
+        const balance = totalAmount - paidAmount;
+
+        return {
+          'ID Réservation': reservation.id,
+          'Statut': reservation.status,
+          'Nom du Client': `${reservation.guest?.firstName || ''} ${reservation.guest?.lastName || ''}`.trim(),
+          'Email': reservation.guest?.email || '',
+          'Téléphone': reservation.guest?.phone || '',
+          'Numéro de Chambre': reservation.room?.roomNumber || 'À déterminer',
+          'Type de Chambre': reservation.room?.type || reservation.roomType || '',
+          "Date d'Arrivée": reservation.checkInDate ? formatDate(reservation.checkInDate, 'dd/MM/yyyy') : '',
+          'Date de Départ': reservation.checkOutDate ? formatDate(reservation.checkOutDate, 'dd/MM/yyyy') : '',
+          'Nombre de Personnes': reservation.numberOfGuests,
+          'Montant Total ($)': totalAmount.toFixed(2),
+          'Montant Payé ($)': paidAmount.toFixed(2),
+          'Solde Restant ($)': balance.toFixed(2),
+          'Demandes Spéciales': reservation.specialRequests || '',
+          'Date de Création': reservation.createdAt ? formatDate(reservation.createdAt, 'dd/MM/yyyy HH:mm') : '',
+        };
+      });
+
+      // Créer un nouveau workbook
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+      // Ajuster la largeur des colonnes
+      const columnWidths = [
+        { wch: 25 }, // ID Réservation
+        { wch: 15 }, // Statut
+        { wch: 25 }, // Nom du Client
+        { wch: 30 }, // Email
+        { wch: 18 }, // Téléphone
+        { wch: 18 }, // Numéro de Chambre
+        { wch: 20 }, // Type de Chambre
+        { wch: 15 }, // Date d'Arrivée
+        { wch: 15 }, // Date de Départ
+        { wch: 18 }, // Nombre de Personnes
+        { wch: 18 }, // Montant Total
+        { wch: 18 }, // Montant Payé
+        { wch: 18 }, // Solde Restant
+        { wch: 40 }, // Demandes Spéciales
+        { wch: 20 }, // Date de Création
+      ];
+      worksheet['!cols'] = columnWidths;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Réservations');
+
+      // Générer le nom du fichier avec la date
+      const fileName = `Reservations_HOTEL-SEPT-ILES_${formatDate(new Date(), 'yyyy-MM-dd_HH-mm')}.xlsx`;
+
+      // Télécharger le fichier
+      XLSX.writeFile(workbook, fileName);
+
+      alert(`✅ Export réussi! ${allReservations.length} réservation(s) exportée(s)`);
+    } catch (error) {
+      console.error('Erreur lors de l\'export:', error);
+      alert('❌ Erreur lors de l\'export des données. Veuillez réessayer.');
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!selectedReservation) return;
+
+    const totalAmount = getTotalAmount(selectedReservation);
+    const paidAmount = getPaidAmount(selectedReservation);
+    const balance = totalAmount - paidAmount;
+
+    // Créer un conteneur temporaire pour le reçu
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.width = '210mm'; // A4 width
+    container.style.background = 'white';
+    document.body.appendChild(container);
+
+    container.innerHTML = `
+      <div style="position: relative; padding: 20px; font-family: Arial, sans-serif; color: #333;">
+        <!-- Filigrane -->
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 60px; font-weight: bold; color: rgba(26, 86, 219, 0.06); white-space: nowrap; z-index: 1; pointer-events: none;">
+          HOTEL-SEPT-ILES
+        </div>
+
+        <!-- Contenu du reçu -->
+        <div style="position: relative; z-index: 2;">
+          <div style="text-align: center; border-bottom: 2px solid #1a56db; padding-bottom: 10px; margin-bottom: 15px;">
+            <h1 style="font-size: 24px; margin-bottom: 5px; color: #1a56db; margin: 0;">HOTEL-SEPT-ILES</h1>
+            <div style="font-size: 14px; color: #666; font-weight: bold;">REÇU DE RÉSERVATION</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Numéro de Réservation</div>
+              <div style="font-size: 11px; font-weight: bold;">#${selectedReservation.id.slice(0, 8).toUpperCase()}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Date d'Émission</div>
+              <div style="font-size: 11px;">${formatDate(new Date(), 'dd/MM/yyyy')}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Statut</div>
+              <div style="display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; background: ${
+                selectedReservation.status === 'CONFIRMED' ? '#dbeafe' :
+                selectedReservation.status === 'PENDING' ? '#fef3c7' :
+                selectedReservation.status === 'CHECKED_IN' ? '#d1fae5' :
+                selectedReservation.status === 'CHECKED_OUT' ? '#e5e7eb' : '#fee2e2'
+              }; color: ${
+                selectedReservation.status === 'CONFIRMED' ? '#1e40af' :
+                selectedReservation.status === 'PENDING' ? '#92400e' :
+                selectedReservation.status === 'CHECKED_IN' ? '#065f46' :
+                selectedReservation.status === 'CHECKED_OUT' ? '#1f2937' : '#991b1b'
+              };">
+                ${selectedReservation.status}
+              </div>
+            </div>
+          </div>
+
+          <div style="font-size: 13px; font-weight: bold; margin: 12px 0 8px 0; padding-bottom: 5px; border-bottom: 2px solid #1a56db; color: #1a56db;">
+            INFORMATIONS CLIENT
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Nom Complet</div>
+              <div style="font-size: 11px;">${selectedReservation.guest?.firstName} ${selectedReservation.guest?.lastName}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Email</div>
+              <div style="font-size: 11px;">${selectedReservation.guest?.email || 'N/A'}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Téléphone</div>
+              <div style="font-size: 11px;">${selectedReservation.guest?.phone || 'N/A'}</div>
+            </div>
+          </div>
+
+          <div style="font-size: 13px; font-weight: bold; margin: 12px 0 8px 0; padding-bottom: 5px; border-bottom: 2px solid #1a56db; color: #1a56db;">
+            DÉTAILS DE LA RÉSERVATION
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Numéro de Chambre</div>
+              <div style="font-size: 11px;">Chambre ${selectedReservation.room?.roomNumber || 'À déterminer'}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Type de Chambre</div>
+              <div style="font-size: 11px;">${selectedReservation.room?.type || selectedReservation.roomType || 'N/A'}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Date d'Arrivée</div>
+              <div style="font-size: 11px;">${selectedReservation.checkInDate ? formatDate(selectedReservation.checkInDate, 'dd/MM/yyyy') : 'N/A'}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Date de Départ</div>
+              <div style="font-size: 11px;">${selectedReservation.checkOutDate ? formatDate(selectedReservation.checkOutDate, 'dd/MM/yyyy') : 'N/A'}</div>
+            </div>
+            <div>
+              <div style="font-weight: bold; color: #555; font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Nombre de Personnes</div>
+              <div style="font-size: 11px;">${selectedReservation.numberOfGuests} personne(s)</div>
+            </div>
+          </div>
+
+          ${selectedReservation.specialRequests ? `
+            <div style="background: #fef3c7; padding: 10px; border-radius: 6px; margin-top: 12px; border-left: 3px solid #f59e0b;">
+              <div style="font-weight: bold; color: #92400e; font-size: 9px; text-transform: uppercase; margin-bottom: 5px;">Demandes Spéciales</div>
+              <div style="color: #78350f; font-size: 10px;">${selectedReservation.specialRequests}</div>
+            </div>
+          ` : ''}
+
+          <div style="font-size: 13px; font-weight: bold; margin: 15px 0 8px 0; padding-bottom: 5px; border-bottom: 2px solid #1a56db; color: #1a56db;">
+            DÉTAILS FINANCIERS
+          </div>
+          <div style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 2px solid #e5e7eb;">
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 12px; border-bottom: 1px solid #ddd;">
+              <span style="font-weight: bold;">Montant Total:</span>
+              <span style="font-weight: bold;">$${totalAmount.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 12px; color: #059669; font-weight: bold; border-bottom: 1px solid #ddd;">
+              <span>Montant Payé:</span>
+              <span>$${paidAmount.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; padding-top: 10px; font-size: 14px; font-weight: bold; color: ${balance > 0 ? '#dc2626' : '#059669'};">
+              <span>Solde ${balance > 0 ? 'Restant' : ''}:</span>
+              <span>$${balance.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px; padding-top: 12px; border-top: 2px solid #1a56db; text-align: center;">
+            <p style="font-size: 12px; font-weight: bold; color: #1a56db; margin-bottom: 6px; margin-top: 0;">Merci pour votre réservation!</p>
+            <p style="font-size: 10px; color: #666; margin-bottom: 3px; margin-top: 0;">HOTEL-SEPT-ILES</p>
+            <p style="font-size: 9px; color: #666; margin-bottom: 8px; margin-top: 0;">Pour toute question: contact@hotel-sept-iles.com</p>
+            <p style="font-size: 8px; color: #999; margin: 0;">Document généré le ${formatDate(new Date(), 'dd/MM/yyyy à HH:mm')}</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    try {
+      // Capturer le contenu avec html2canvas
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      // Créer le PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pageWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Ajouter la première page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Ajouter des pages supplémentaires si nécessaire
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Télécharger le PDF
+      pdf.save(`Recu-Reservation-${selectedReservation.id.slice(0, 8)}.pdf`);
+
+    } catch (error) {
+      console.error('Erreur lors de la génération du PDF:', error);
+      alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
+    } finally {
+      // Nettoyer le conteneur temporaire
+      document.body.removeChild(container);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -491,44 +757,45 @@ export default function ReservationsPage() {
         {/* Filters */}
         <Card>
           <CardBody>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Input
-                placeholder="Search by guest name, email..."
-                value={filters.search}
-                onChange={(e) =>
-                  setFilters({ ...filters, search: e.target.value })
-                }
-                leftIcon={<Search className="w-4 h-4 text-gray-400" />}
-              />
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-2">
+                  <Input
+                    placeholder="Rechercher par ID, nom, email, téléphone..."
+                    value={filters.search}
+                    onChange={(e) =>
+                      setFilters({ ...filters, search: e.target.value })
+                    }
+                    leftIcon={<Search className="w-4 h-4 text-gray-400" />}
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-1">
+                    💡 Recherche dans: ID réservation, Nom du client, Email, Téléphone
+                  </p>
+                </div>
 
-              <Select
-                value={filters.status}
-                onChange={(e) =>
-                  setFilters({ ...filters, status: e.target.value })
-                }
-                options={[
-                  { value: '', label: 'All Status' },
-                  { value: 'PENDING', label: 'Pending' },
-                  { value: 'CONFIRMED', label: 'Confirmed' },
-                  { value: 'CHECKED_IN', label: 'Checked In' },
-                  { value: 'CHECKED_OUT', label: 'Checked Out' },
-                  { value: 'CANCELLED', label: 'Cancelled' },
-                ]}
-              />
+                <Select
+                  value={filters.status}
+                  onChange={(e) =>
+                    setFilters({ ...filters, status: e.target.value })
+                  }
+                  options={[
+                    { value: '', label: 'Tous les statuts' },
+                    { value: 'PENDING', label: 'En attente' },
+                    { value: 'CONFIRMED', label: 'Confirmé' },
+                    { value: 'CHECKED_IN', label: 'Arrivé' },
+                    { value: 'CHECKED_OUT', label: 'Parti' },
+                    { value: 'CANCELLED', label: 'Annulé' },
+                  ]}
+                />
 
-              <Button
-                variant="secondary"
-                leftIcon={<Filter className="w-4 h-4" />}
-              >
-                More Filters
-              </Button>
-
-              <Button
-                variant="ghost"
-                leftIcon={<Download className="w-4 h-4" />}
-              >
-                Export
-              </Button>
+                <Button
+                  variant="ghost"
+                  leftIcon={<Download className="w-4 h-4" />}
+                  onClick={handleExport}
+                >
+                  Export Excel
+                </Button>
+              </div>
             </div>
           </CardBody>
         </Card>
@@ -815,6 +1082,13 @@ export default function ReservationsPage() {
               onClick={() => setShowDetailsModal(false)}
             >
               Close
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handlePrint}
+              leftIcon={<Download className="w-4 h-4" />}
+            >
+              Télécharger PDF
             </Button>
           </ModalFooter>
         </Modal>

@@ -92,9 +92,22 @@ export default function ChatPage() {
     try {
       setIsLoading(true);
       const response = await chatService.getConversations(filters);
-      setConversations(response.data || []);
+      console.log('💬 Response from getConversations:', response);
+
+      // Gérer différents formats de réponse possibles
+      let conversationsData: ChatConversation[] = [];
+
+      if (Array.isArray(response)) {
+        conversationsData = response;
+      } else if (response && typeof response === 'object') {
+        conversationsData = response.data || [];
+      }
+
+      console.log('✅ Conversations loaded:', conversationsData.length);
+      setConversations(conversationsData);
     } catch (error) {
-      console.error('Failed to load conversations:', error);
+      console.error('❌ Failed to load conversations:', error);
+      setConversations([]);
     } finally {
       setIsLoading(false);
     }
@@ -112,9 +125,24 @@ export default function ChatPage() {
   const loadMessages = async (conversationId: string) => {
     try {
       const response = await chatService.getMessages(conversationId);
-      setMessages(response.messages || []);
+      console.log('📩 Response from getMessages:', response);
+
+      // Gérer différents formats de réponse possibles
+      let messagesData: ChatMessage[] = [];
+
+      if (Array.isArray(response)) {
+        // Si la réponse est directement un tableau
+        messagesData = response;
+      } else if (response && typeof response === 'object') {
+        // Si c'est un objet, chercher les messages
+        messagesData = response.messages || response.data?.messages || [];
+      }
+
+      console.log('✅ Messages loaded:', messagesData.length);
+      setMessages(messagesData);
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      console.error('❌ Failed to load messages:', error);
+      setMessages([]);
     }
   };
 
@@ -135,13 +163,18 @@ export default function ChatPage() {
     try {
       setIsSending(true);
       const senderName = 'Support'; // TODO: Get from logged in user
-      await chatService.sendMessage(selectedConversation.id, newMessage, senderName);
+      console.log('📤 Sending message:', { conversationId: selectedConversation.id, message: newMessage });
+
+      const sentMessage = await chatService.sendMessage(selectedConversation.id, newMessage, senderName);
+      console.log('✅ Message sent:', sentMessage);
+
       setNewMessage('');
       await loadMessages(selectedConversation.id);
       await loadConversations();
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      alert('Erreur lors de l\'envoi du message');
+    } catch (error: any) {
+      console.error('❌ Failed to send message:', error);
+      console.error('Error details:', error.response?.data);
+      alert(`Erreur lors de l'envoi du message: ${error.response?.data?.message || error.message}`);
     } finally {
       setIsSending(false);
     }
@@ -391,33 +424,49 @@ export default function ChatPage() {
                 <CardBody className="p-0">
                   {/* Messages */}
                   <div className="h-[400px] overflow-y-auto p-4 space-y-4">
-                    {messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${
-                          message.senderType === 'STAFF' ? 'justify-end' : 'justify-start'
-                        }`}
-                      >
-                        <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
-                            message.senderType === 'STAFF'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-xs font-semibold opacity-80">
-                              {message.senderName}
-                            </p>
-                            <p className="text-xs opacity-70">
-                              {formatDate(message.createdAt, 'p')}
-                            </p>
-                          </div>
-                          <p className="text-sm">{message.message}</p>
+                    {messages.length === 0 ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-500 dark:text-gray-400 text-sm">
+                            Aucun message dans cette conversation
+                          </p>
+                          <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
+                            Envoyez le premier message ci-dessous
+                          </p>
                         </div>
                       </div>
-                    ))}
-                    <div ref={messagesEndRef} />
+                    ) : (
+                      <>
+                        {messages.map((message) => (
+                          <div
+                            key={message.id}
+                            className={`flex ${
+                              message.senderType === 'STAFF' ? 'justify-end' : 'justify-start'
+                            }`}
+                          >
+                            <div
+                              className={`max-w-[70%] rounded-lg p-3 ${
+                                message.senderType === 'STAFF'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-xs font-semibold opacity-80">
+                                  {message.senderName}
+                                </p>
+                                <p className="text-xs opacity-70">
+                                  {formatDate(message.createdAt, 'p')}
+                                </p>
+                              </div>
+                              <p className="text-sm">{message.message}</p>
+                            </div>
+                          </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                      </>
+                    )}
                   </div>
 
                   {/* Message Input */}

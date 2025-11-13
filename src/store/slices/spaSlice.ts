@@ -54,12 +54,21 @@ export const fetchSpaCategories = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllCategories();
+      console.log('🏷️ SPA - Response from getAllCategories:', response);
+
       // Gérer différents formats de réponse API
+      let categoriesData: SpaCategoryData[] = [];
+
       if (Array.isArray(response)) {
-        return response;
+        categoriesData = response;
+      } else if (response && typeof response === 'object') {
+        categoriesData = response?.data?.categories || response?.data || response?.categories || [];
       }
-      return response?.data || response?.categories || [];
+
+      console.log('✅ SPA - Categories loaded:', categoriesData.length);
+      return categoriesData;
     } catch (error: any) {
+      console.error('❌ SPA - Failed to fetch categories:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch categories');
     }
   }
@@ -72,12 +81,21 @@ export const fetchSpaServices = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllServices(params);
+      console.log('✨ SPA - Response from getAllServices:', response);
+
       // Gérer différents formats de réponse API
+      let servicesData: SpaService[] = [];
+
       if (Array.isArray(response)) {
-        return response;
+        servicesData = response;
+      } else if (response && typeof response === 'object') {
+        servicesData = response?.data?.services || response?.data || response?.services || [];
       }
-      return response?.data || response?.services || [];
+
+      console.log('✅ SPA - Services loaded:', servicesData.length);
+      return servicesData;
     } catch (error: any) {
+      console.error('❌ SPA - Failed to fetch services:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch services');
     }
   }
@@ -126,12 +144,21 @@ export const fetchSpaPackages = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllPackages(params);
+      console.log('📦 SPA - Response from getAllPackages:', response);
+
       // Gérer différents formats de réponse API
+      let packagesData: SpaPackage[] = [];
+
       if (Array.isArray(response)) {
-        return response;
+        packagesData = response;
+      } else if (response && typeof response === 'object') {
+        packagesData = response?.data?.packages || response?.data || response?.packages || [];
       }
-      return response?.data || response?.packages || [];
+
+      console.log('✅ SPA - Packages loaded:', packagesData.length);
+      return packagesData;
     } catch (error: any) {
+      console.error('❌ SPA - Failed to fetch packages:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch packages');
     }
   }
@@ -180,12 +207,22 @@ export const fetchSpaReservations = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllReservations(params);
+      console.log('📅 SPA - Response from getAllReservations:', response);
+
       // Gérer différents formats de réponse API
+      let reservationsData: SpaReservation[] = [];
+
       if (Array.isArray(response)) {
-        return response;
+        reservationsData = response;
+      } else if (response && typeof response === 'object') {
+        reservationsData = response?.data?.reservations || response?.data || response?.reservations || [];
       }
-      return response?.data || response?.reservations || [];
+
+      console.log('✅ SPA - Reservations loaded:', reservationsData.length);
+      return reservationsData;
     } catch (error: any) {
+      console.error('❌ SPA - Failed to fetch reservations:', error);
+      console.error('Error response:', error.response?.data);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch reservations');
     }
   }
@@ -246,12 +283,21 @@ export const fetchSpaCertificates = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getAllCertificates(params);
+      console.log('🎁 SPA - Response from getAllCertificates:', response);
+
       // Gérer différents formats de réponse API
+      let certificatesData: SpaCertificate[] = [];
+
       if (Array.isArray(response)) {
-        return response;
+        certificatesData = response;
+      } else if (response && typeof response === 'object') {
+        certificatesData = response?.data?.certificates || response?.data || response?.certificates || [];
       }
-      return response?.data || response?.certificates || [];
+
+      console.log('✅ SPA - Certificates loaded:', certificatesData.length);
+      return certificatesData;
     } catch (error: any) {
+      console.error('❌ SPA - Failed to fetch certificates:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch certificates');
     }
   }
@@ -328,8 +374,19 @@ export const fetchSpaStats = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await spaService.getStatistics(params);
-      return response;
+      console.log('📊 SPA - Response from getStatistics:', response);
+
+      // Gérer différents formats de réponse API
+      let statsData: SpaStats | null = null;
+
+      if (response && typeof response === 'object') {
+        statsData = response?.data || response;
+      }
+
+      console.log('✅ SPA - Stats loaded:', statsData);
+      return statsData;
     } catch (error: any) {
+      console.error('❌ SPA - Failed to fetch stats:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch stats');
     }
   }
