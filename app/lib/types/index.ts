@@ -610,28 +610,46 @@ export interface Report {
 }
 
 export interface DashboardStats {
-  todayRevenue: number;
-  monthRevenue: number;
-  occupancyRate: number;
-  totalReservations: number;
-  pendingTasks: number;
-  newGuests: number;
-  checkInsToday: number;
-  checkOutsToday: number;
-  revenueByMonth: {
-    month: string;
-    revenue: number;
-  }[];
-  reservationsByStatus: {
-    status: string;
-    count: number;
-  }[];
-  roomsByStatus: {
-    status: string;
-    count: number;
-  }[];
-  topRooms: {
-    roomNumber: string;
-    bookings: number;
-  }[];
+  stats: {
+    revenue: {
+      today: number;
+      week: number;
+      month: number;
+      average: number;
+    };
+    occupancy: {
+      totalRooms: number;
+      occupiedRooms: number;
+      availableRooms: number;
+      occupancyRate: number;
+    };
+    reservations: {
+      total: number;
+      confirmed: number;
+      pending: number;
+      cancelled: number;
+      cancelledThisMonth: number;
+    };
+    clients: {
+      newClientsToday: number;
+      newClientsWeek: number;
+      newClientsMonth: number;
+      activeClients: number;
+      conversionRate: number;
+    };
+  };
+  charts: {
+    monthlyRevenue: {
+      month: string;
+      revenue: number;
+    }[];
+    monthlyOccupancy: {
+      month: string;
+      rate: number;
+    }[];
+    revenueByRoomType: {
+      type: string;
+      revenue: number;
+    }[];
+  };
 }

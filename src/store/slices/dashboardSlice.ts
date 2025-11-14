@@ -19,8 +19,20 @@ export const fetchDashboardStats = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await dashboardService.getStats();
-      return response.data;
+      console.log('📊 DASHBOARD - Response from getStats:', response);
+
+      // Gérer différents formats de réponse API
+      let statsData: DashboardStats | null = null;
+
+      if (response && typeof response === 'object') {
+        statsData = response.data || response;
+      }
+
+      console.log('✅ DASHBOARD - Stats loaded:', statsData);
+      return statsData;
     } catch (error: any) {
+      console.error('❌ DASHBOARD - Failed to fetch stats:', error);
+      console.error('Error response:', error.response?.data);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch dashboard stats');
     }
   }

@@ -20,8 +20,10 @@ export const staffService = {
   },
 
   create: async (data: Partial<Staff>) => {
-    const response = await api.post<Staff>('/staff', data);
-    return response.data;
+    console.log('👤 STAFF - Creating new staff member:', data);
+    const response = await api.post<Staff>('/auth/staff/register', data);
+    console.log('✅ STAFF - Staff member created:', response);
+    return response.data || response;
   },
 
   update: async (id: string, data: Partial<Staff>) => {
