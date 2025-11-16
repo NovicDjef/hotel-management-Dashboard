@@ -10,13 +10,16 @@ export const staffService = {
     department?: string;
     search?: string;
   }) => {
+    console.log('👥 STAFF SERVICE - Fetching all staff with params:', params);
     const response = await api.get<Staff[]>('/staff', params);
-    return response as unknown as PaginatedResponse<Staff>;
+    console.log('👥 STAFF SERVICE - getAll response:', response);
+    return response;
   },
 
   getById: async (id: string) => {
     const response = await api.get<Staff>(`/staff/${id}`);
-    return response.data;
+    console.log('👤 STAFF SERVICE - getById response:', response);
+    return response.data || response;
   },
 
   create: async (data: Partial<Staff>) => {
@@ -28,16 +31,20 @@ export const staffService = {
 
   update: async (id: string, data: Partial<Staff>) => {
     const response = await api.put<Staff>(`/staff/${id}`, data);
-    return response.data;
+    console.log('✏️ STAFF SERVICE - update response:', response);
+    return response.data || response;
   },
 
   delete: async (id: string) => {
     const response = await api.delete(`/staff/${id}`);
+    console.log('🗑️ STAFF SERVICE - delete response:', response);
     return response;
   },
 
   getStats: async () => {
-    const response = await api.get<StaffStats>('/staff/stats');
-    return response.data;
+    console.log('📊 STAFF SERVICE - Fetching stats...');
+    const response = await api.get('/staff/stats');
+    console.log('📊 STAFF SERVICE - getStats response:', response.data);
+    return response;
   },
 };

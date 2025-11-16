@@ -79,7 +79,36 @@ export const authService = {
 
 export const dashboardService = {
   getStats: async () => {
-    const response = await apiService.get('/reports/dashboard');
+    const response = await apiService.get('/statistics/dashboard');
+    return response.data;
+  },
+
+  // ✨ NOUVELLES API
+  getTotalStaff: async () => {
+    console.log('📊 DASHBOARD SERVICE - Fetching total staff...');
+    const response = await apiService.get('/statistics/total-staff');
+    console.log('✅ DASHBOARD SERVICE - Total staff response:', response);
+    return response.data;
+  },
+
+  getTotalGuests: async () => {
+    console.log('📊 DASHBOARD SERVICE - Fetching total guests...');
+    const response = await apiService.get('/statistics/total-guests');
+    console.log('✅ DASHBOARD SERVICE - Total guests response:', response);
+    return response.data;
+  },
+
+  getTotalRevenue: async () => {
+    console.log('📊 DASHBOARD SERVICE - Fetching total revenue...');
+    const response = await apiService.get('/statistics/total-revenue');
+    console.log('✅ DASHBOARD SERVICE - Total revenue response:', response);
+    return response.data;
+  },
+
+  getReservationsStats: async () => {
+    console.log('📊 DASHBOARD SERVICE - Fetching reservations stats...');
+    const response = await apiService.get('/statistics/reservations');
+    console.log('✅ DASHBOARD SERVICE - Reservations stats response:', response);
     return response.data;
   },
 };
@@ -264,6 +293,68 @@ export const roomService = {
     });
     return response.data;
   },
+
+  // ✨ NOUVELLES MÉTHODES - Attribution de chambres
+
+  // Obtenir les chambres disponibles pour attribution
+  getAvailableForAssignment: async (params: {
+    roomType?: string;
+    checkInDate: string;
+    checkOutDate: string;
+    hotelId?: string;
+  }) => {
+    console.log('🔍 ROOM SERVICE - Fetching available rooms for assignment:', params);
+    const response = await apiService.get('/rooms/available-for-assignment', {
+      params: {
+        roomType: params.roomType,
+        checkInDate: params.checkInDate,
+        checkOutDate: params.checkOutDate,
+        hotelId: params.hotelId || hotelId,
+      },
+    });
+    console.log('✅ ROOM SERVICE - Available rooms:', response);
+    return response.data;
+  },
+
+  // Attribuer une chambre à une réservation
+  assignToReservation: async (data: {
+    reservationId: string;
+    roomId: string;
+  }) => {
+    console.log('🏨 ROOM SERVICE - Assigning room to reservation:', data);
+    const response = await apiService.post('/rooms/assign-to-reservation', data);
+    console.log('✅ ROOM SERVICE - Room assigned:', response);
+    return response.data;
+  },
+
+  // Retirer l'attribution d'une chambre
+  unassignFromReservation: async (data: {
+    reservationId: string;
+    roomId: string;
+  }) => {
+    console.log('🚫 ROOM SERVICE - Unassigning room from reservation:', data);
+    const response = await apiService.post('/rooms/unassign-from-reservation', data);
+    console.log('✅ ROOM SERVICE - Room unassigned:', response);
+    return response.data;
+  },
+
+  // Obtenir toutes les chambres avec leur statut d'occupation
+  getAllWithStatus: async (params?: {
+    hotelId?: string;
+    checkInDate?: string;
+    checkOutDate?: string;
+  }) => {
+    console.log('📊 ROOM SERVICE - Fetching all rooms with status:', params);
+    const response = await apiService.get('/rooms/all-with-status', {
+      params: {
+        hotelId: params?.hotelId || hotelId,
+        checkInDate: params?.checkInDate,
+        checkOutDate: params?.checkOutDate,
+      },
+    });
+    console.log('✅ ROOM SERVICE - Rooms with status:', response);
+    return response.data;
+  },
 };
 
 // ==================== CLIENTS (GUESTS) ====================
@@ -305,7 +396,9 @@ export const guestService = {
   },
 
   getStats: async () => {
-    const response = await apiService.get('/guests/stats');
+    console.log('📊 GUEST SERVICE - Fetching stats...');
+    const response = await apiService.get('/statistics/total-guests');
+    console.log('📊 GUEST SERVICE - getStats response:', response);
     return response.data;
   },
 };
@@ -339,7 +432,9 @@ export const staffService = {
   },
 
   getStats: async () => {
-    const response = await apiService.get('/staff/stats');
+    console.log('📊 STAFF SERVICE - Fetching stats...');
+    const response = await apiService.get('/taff/stats');
+    console.log('📊 STAFF SERVICE - getStats response:', response);
     return response.data;
   },
 };

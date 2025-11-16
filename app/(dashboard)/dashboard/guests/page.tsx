@@ -50,9 +50,22 @@ export default function GuestsPage() {
   });
 
   useEffect(() => {
+    console.log('👥 GUESTS PAGE - Loading guests data with filters:', filters);
     dispatch(fetchGuests(filters));
     dispatch(fetchGuestStats());
   }, [dispatch, filters]);
+
+  // Log des stats pour debug
+  useEffect(() => {
+    console.log('📊 GUESTS PAGE - Stats loaded:', stats);
+    if (stats) {
+      console.log('   - Total clients:', stats.total);
+      console.log('   - Clients VIP:', stats.vip);
+      console.log('   - Nouveaux ce mois:', stats.newThisMonth);
+      console.log('   - Clients réguliers (avec réservations):', stats.repeatGuests);
+    }
+    console.log('👥 GUESTS PAGE - Guests list count:', guests.length);
+  }, [stats, guests]);
 
   const handleSearch = () => {
     setFilters({ ...filters, search: searchTerm, page: 1 });

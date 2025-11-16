@@ -43,7 +43,7 @@ export async function createGuestAuth(): Promise<string | null> {
 
     console.log('🔑 Création d\'un compte guest automatique...')
 
-    const response = await apiService.post<GuestAuthResponse>('/api/v1/auth/guest/register', {
+    const response = await apiService.post<GuestAuthResponse>('/auth/guest/register', {
       firstName: 'Visiteur',
       lastName: 'Guest',
       email: guestEmail,

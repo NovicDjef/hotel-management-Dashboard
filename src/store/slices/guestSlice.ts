@@ -23,8 +23,20 @@ export const fetchGuests = createAsyncThunk(
   async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await guestService.getAll(params);
-      return response.data;
+      console.log('👥 GUESTS - Response from getAll:', response);
+
+      // Gérer différents formats de réponse API
+      let guestsData: Guest[] = [];
+      if (Array.isArray(response)) {
+        guestsData = response;
+      } else if (response && typeof response === 'object') {
+        guestsData = response.data?.guests || response.data || response.guests || [];
+      }
+
+      console.log('✅ GUESTS - Guests loaded:', guestsData.length);
+      return guestsData;
     } catch (error: any) {
+      console.error('❌ GUESTS - Failed to fetch guests:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch guests');
     }
   }
@@ -35,8 +47,37 @@ export const fetchGuestStats = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await guestService.getStats();
-      return response.data;
+      console.log('📊 GUESTS - Response from getStats:', response);
+      console.log('📊 GUESTS - Response.data:', response.data);
+
+      // Gérer le nouveau format de réponse API
+      // Le service retourne déjà response.data, donc response = { success, message, data: { total, withReservations } }
+      let statsData: any = null;
+
+      // Les vraies données sont dans response.data
+      if (response && response.data) {
+        const { total, withReservations } = response.data;
+
+        statsData = {
+          total: total || 0,
+          vip: 0, // Non fourni par la nouvelle API
+          newThisMonth: 0, // Non fourni par la nouvelle API
+          repeatGuests: withReservations || 0,
+          withReservations: withReservations || 0, // Ajouter aussi le champ original
+        };
+
+        console.log('📊 GUESTS - Parsed data:');
+        console.log('   - Total clients:', total);
+        console.log('   - Clients avec réservations:', withReservations);
+      } else {
+        // Format ancien ou inattendu
+        statsData = response;
+      }
+
+      console.log('✅ GUESTS - Stats loaded:', statsData);
+      return statsData;
     } catch (error: any) {
+      console.error('❌ GUESTS - Failed to fetch stats:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch stats');
     }
   }

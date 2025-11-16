@@ -102,6 +102,13 @@ export default function ReservationsPage() {
   const [roomTypes, setRoomTypes] = useState<RoomTypeInventory[]>([]);
   const [isLoadingRoomTypes, setIsLoadingRoomTypes] = useState(false);
 
+  // ✨ États pour l'attribution de chambres
+  const [showRoomAssignmentModal, setShowRoomAssignmentModal] = useState(false);
+  const [reservationForAssignment, setReservationForAssignment] = useState<Reservation | null>(null);
+  const [availableRooms, setAvailableRooms] = useState<any[]>([]);
+  const [isLoadingAvailableRooms, setIsLoadingAvailableRooms] = useState(false);
+  const [selectedRoomForAssignment, setSelectedRoomForAssignment] = useState<string>('');
+
   const [filters, setFilters] = useState({
     search: '',
     status: '',
@@ -733,6 +740,102 @@ export default function ReservationsPage() {
     }
   };
 
+  // ✨ NOUVELLES FONCTIONS - Attribution de chambres
+
+  // Ouvrir le modal d'attribution et charger les chambres disponibles
+  const handleOpenRoomAssignment = async (reservation: Reservation) => {
+    console.log('🏨 Opening room assignment modal for reservation:', reservation);
+    setReservationForAssignment(reservation);
+    setShowRoomAssignmentModal(true);
+    setSelectedRoomForAssignment('');
+
+    // Charger les chambres disponibles
+    await loadAvailableRooms(reservation);
+  };
+
+  // Charger les chambres disponibles pour une réservation
+  const loadAvailableRooms = async (reservation: Reservation) => {
+    setIsLoadingAvailableRooms(true);
+    try {
+      console.log('🔍 Loading available rooms for reservation:', {
+        roomType: reservation.roomType,
+        checkInDate: reservation.checkInDate,
+        checkOutDate: reservation.checkOutDate,
+      });
+
+      const rooms = await roomService.getAvailableForAssignment({
+        roomType: reservation.roomType,
+        checkInDate: reservation.checkInDate.toString(),
+        checkOutDate: reservation.checkOutDate.toString(),
+        hotelId: reservation.hotelId,
+      });
+
+      console.log('✅ Available rooms loaded:', rooms);
+      setAvailableRooms(rooms || []);
+    } catch (error: any) {
+      console.error('❌ Error loading available rooms:', error);
+      alert(`Erreur lors du chargement des chambres: ${error.message || 'Erreur inconnue'}`);
+      setAvailableRooms([]);
+    } finally {
+      setIsLoadingAvailableRooms(false);
+    }
+  };
+
+  // Attribuer une chambre à la réservation
+  const handleAssignRoom = async () => {
+    if (!reservationForAssignment || !selectedRoomForAssignment) {
+      alert('Veuillez sélectionner une chambre');
+      return;
+    }
+
+    try {
+      console.log('🏨 Assigning room:', {
+        reservationId: reservationForAssignment.id,
+        roomId: selectedRoomForAssignment,
+      });
+
+      await roomService.assignToReservation({
+        reservationId: reservationForAssignment.id,
+        roomId: selectedRoomForAssignment,
+      });
+
+      alert('✅ Chambre attribuée avec succès !');
+      setShowRoomAssignmentModal(false);
+      setReservationForAssignment(null);
+      setSelectedRoomForAssignment('');
+
+      // Recharger les réservations pour voir la mise à jour
+      await loadReservations();
+    } catch (error: any) {
+      console.error('❌ Error assigning room:', error);
+      alert(`Erreur lors de l'attribution: ${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
+    }
+  };
+
+  // Retirer l'attribution d'une chambre
+  const handleUnassignRoom = async (reservationId: string, roomId: string) => {
+    if (!confirm('Voulez-vous vraiment retirer cette attribution ?')) {
+      return;
+    }
+
+    try {
+      console.log('🚫 Unassigning room:', { reservationId, roomId });
+
+      await roomService.unassignFromReservation({
+        reservationId,
+        roomId,
+      });
+
+      alert('✅ Attribution retirée avec succès !');
+
+      // Recharger les réservations pour voir la mise à jour
+      await loadReservations();
+    } catch (error: any) {
+      console.error('❌ Error unassigning room:', error);
+      alert(`Erreur lors du retrait: ${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -894,6 +997,20 @@ export default function ReservationsPage() {
                               title="Confirm Reservation"
                             >
                               <CheckCircle className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* ✨ Bouton d'attribution de chambre */}
+                          {reservation.status === 'CONFIRMED' && (
+                            <button
+                              onClick={() => handleOpenRoomAssignment(reservation)}
+                              className="p-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 rounded text-indigo-600"
+                              title="Attribuer une chambre"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                              </svg>
                             </button>
                           )}
 
@@ -1809,6 +1926,140 @@ export default function ReservationsPage() {
               leftIcon={<Edit className="w-4 h-4" />}
             >
               Modifier la réservation
+            </Button>
+          </ModalFooter>
+        </Modal>
+
+        {/* ✨ Modal d'attribution de chambre */}
+        <Modal
+          isOpen={showRoomAssignmentModal}
+          onClose={() => {
+            setShowRoomAssignmentModal(false);
+            setReservationForAssignment(null);
+            setAvailableRooms([]);
+            setSelectedRoomForAssignment('');
+          }}
+          title="🏨 Attribuer une chambre"
+          size="lg"
+        >
+          {reservationForAssignment && (
+            <div className="space-y-4">
+              {/* Informations de la réservation */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  Réservation #{reservationForAssignment.id.slice(0, 8).toUpperCase()}
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Client:</span>{' '}
+                    <span className="font-medium">
+                      {reservationForAssignment.guest?.firstName} {reservationForAssignment.guest?.lastName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Type:</span>{' '}
+                    <span className="font-medium">{reservationForAssignment.roomType}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Check-in:</span>{' '}
+                    <span className="font-medium">{formatDate(reservationForAssignment.checkInDate)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Check-out:</span>{' '}
+                    <span className="font-medium">{formatDate(reservationForAssignment.checkOutDate)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Liste des chambres disponibles */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Sélectionnez une chambre disponible
+                </label>
+
+                {isLoadingAvailableRooms ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Chargement des chambres...</p>
+                  </div>
+                ) : availableRooms.length === 0 ? (
+                  <div className="text-center py-8 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                    <p className="text-yellow-800 dark:text-yellow-200 font-medium">
+                      ⚠️ Aucune chambre disponible
+                    </p>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                      Toutes les chambres de type {reservationForAssignment.roomType} sont déjà attribuées pour cette période.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto">
+                    {availableRooms.map((room: any) => (
+                      <div
+                        key={room.id}
+                        onClick={() => setSelectedRoomForAssignment(room.id)}
+                        className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                          selectedRoomForAssignment === room.id
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                Chambre {room.roomNumber}
+                              </span>
+                              <Badge variant={room.status === 'AVAILABLE' ? 'success' : 'info'} size="sm">
+                                {room.status}
+                              </Badge>
+                            </div>
+                            <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                              <span>Type: {room.type}</span> •{' '}
+                              <span>Étage: {room.floor}</span> •{' '}
+                              <span>Capacité: {room.capacity} pers.</span>
+                            </div>
+                            {room.amenities && room.amenities.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {room.amenities.slice(0, 5).map((amenity: string, idx: number) => (
+                                  <Badge key={idx} variant="default" size="sm">
+                                    {amenity}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {selectedRoomForAssignment === room.id && (
+                            <div className="ml-3">
+                              <CheckCircle className="w-6 h-6 text-blue-600" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowRoomAssignmentModal(false);
+                setReservationForAssignment(null);
+                setAvailableRooms([]);
+                setSelectedRoomForAssignment('');
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleAssignRoom}
+              disabled={!selectedRoomForAssignment || isLoadingAvailableRooms}
+            >
+              Attribuer la chambre
             </Button>
           </ModalFooter>
         </Modal>

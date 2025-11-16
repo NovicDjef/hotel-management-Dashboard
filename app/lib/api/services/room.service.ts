@@ -69,4 +69,53 @@ export const roomService = {
     const response = await api.get<Room[]>('/rooms/cleaning-needed');
     return response.data;
   },
+
+  // ✨ NOUVELLES MÉTHODES - Attribution de chambres
+
+  // Obtenir les chambres disponibles pour attribution
+  getAvailableForAssignment: async (params: {
+    roomType?: string;
+    checkInDate: string;
+    checkOutDate: string;
+    hotelId?: string;
+  }) => {
+    console.log('🔍 ROOM SERVICE - Fetching available rooms for assignment:', params);
+    const response = await api.get<Room[]>('/rooms/available-for-assignment', params);
+    console.log('✅ ROOM SERVICE - Available rooms:', response);
+    return response.data || response;
+  },
+
+  // Attribuer une chambre à une réservation
+  assignToReservation: async (data: {
+    reservationId: string;
+    roomId: string;
+  }) => {
+    console.log('🏨 ROOM SERVICE - Assigning room to reservation:', data);
+    const response = await api.post('/rooms/assign-to-reservation', data);
+    console.log('✅ ROOM SERVICE - Room assigned:', response);
+    return response.data || response;
+  },
+
+  // Retirer l'attribution d'une chambre
+  unassignFromReservation: async (data: {
+    reservationId: string;
+    roomId: string;
+  }) => {
+    console.log('🚫 ROOM SERVICE - Unassigning room from reservation:', data);
+    const response = await api.post('/rooms/unassign-from-reservation', data);
+    console.log('✅ ROOM SERVICE - Room unassigned:', response);
+    return response.data || response;
+  },
+
+  // Obtenir toutes les chambres avec leur statut d'occupation
+  getAllWithStatus: async (params?: {
+    hotelId?: string;
+    checkInDate?: string;
+    checkOutDate?: string;
+  }) => {
+    console.log('📊 ROOM SERVICE - Fetching all rooms with status:', params);
+    const response = await api.get('/rooms/all-with-status', params);
+    console.log('✅ ROOM SERVICE - Rooms with status:', response);
+    return response.data || response;
+  },
 };

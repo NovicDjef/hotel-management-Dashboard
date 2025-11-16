@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import type { ApiResponse, AuthTokens } from '@/lib/types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1';
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -71,6 +71,20 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
 
+    // Log all API requests for debugging
+    const isPublic = config.url?.includes('/auth/login') || config.url?.includes('/auth/register');
+    const isSemiPublic = config.url?.includes('/auth/refresh');
+    const requiresAuth = !isPublic && !isSemiPublic;
+
+    console.log('🌐 API Request:', {
+      baseURL: config.baseURL,
+      url: config.url,
+      fullURL: `${config.baseURL}${config.url}`,
+      isPublic,
+      isSemiPublic,
+      requiresAuth,
+    });
+
     return config;
   },
   (error) => {
@@ -99,9 +113,20 @@ const processQueue = (error: any = null) => {
 
 apiClient.interceptors.response.use(
   (response) => {
+    console.log('✅ API Response:', {
+      url: response.config.url,
+      status: response.status,
+      data: response.data,
+    });
     return response;
   },
   async (error: AxiosError<ApiResponse>) => {
+    console.error('❌ API Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message,
+      data: error.response?.data,
+    });
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };

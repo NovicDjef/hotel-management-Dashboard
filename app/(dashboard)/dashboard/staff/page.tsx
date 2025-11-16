@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
 import { Card, CardBody, CardHeader, Button, Input, Badge, Modal, ModalFooter, Select } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
@@ -26,6 +26,45 @@ export default function StaffPage() {
   const dispatch = useAppDispatch();
   const { staffMembers, stats, isLoading } = useAppSelector((state) => state.staff);
   const { formatDate } = useClientDate();
+
+  // Calculer les stats à partir des données si nécessaire
+  const computedStats = useMemo(() => {
+    console.log('🔄 STAFF PAGE - Computing stats...');
+    console.log('   - stats from API:', stats);
+    console.log('   - staffMembers count:', staffMembers.length);
+
+    // Priorité 1 : Utiliser les stats de l'API /staff/stats
+    if (stats && stats.total !== undefined) {
+      console.log('✅ Using stats from API /staff/stats:', stats);
+      return stats;
+    }
+
+    // Priorité 2 : Calculer les stats à partir de staffMembers
+    console.log('⚠️ Stats not available, calculating from staffMembers...');
+    const total = staffMembers.length;
+    const active = staffMembers.filter(s => s.isActive).length;
+
+    const byRole: Record<string, number> = {};
+    staffMembers.forEach(staff => {
+      byRole[staff.role] = (byRole[staff.role] || 0) + 1;
+    });
+
+    const byDepartment: Record<string, number> = {};
+    staffMembers.forEach(staff => {
+      if (staff.department) {
+        byDepartment[staff.department] = (byDepartment[staff.department] || 0) + 1;
+      }
+    });
+
+    const computed = {
+      total,
+      active,
+      byRole,
+      byDepartment,
+    };
+    console.log('📊 Computed stats:', computed);
+    return computed;
+  }, [stats, staffMembers]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -58,15 +97,23 @@ export default function StaffPage() {
   const [selectedStaff, setSelectedStaff] = useState<any | null>(null);
 
   useEffect(() => {
+    console.log('📋 STAFF PAGE - Loading staff data with filters:', filters);
     dispatch(fetchStaff(filters));
     dispatch(fetchStaffStats());
   }, [dispatch, filters]);
+
+  // Log computed stats pour debug
+  useEffect(() => {
+    console.log('📊 STAFF PAGE - Computed stats:', computedStats);
+    console.log('👥 STAFF PAGE - Staff members count:', staffMembers.length);
+  }, [computedStats, staffMembers]);
 
   const handleSearch = () => {
     setFilters({ ...filters, search: searchTerm, page: 1 });
   };
 
   const handleViewDetails = (staff: any) => {
+    console.log('👁️ STAFF - Viewing staff details:', staff);
     setSelectedStaff(staff);
     setShowDetailsModal(true);
   };
@@ -118,7 +165,7 @@ export default function StaffPage() {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
-  const getRoleColor = (role: string): 'danger' | 'warning' | 'info' | 'success' | 'purple' | 'default' => {
+  const getRoleColor = (role: string): 'danger' | 'blue' | 'warning' | 'info' | 'success' | 'purple' | 'default' => {
     switch (role) {
       case 'SUPER_ADMIN':
         return 'danger';
@@ -128,6 +175,8 @@ export default function StaffPage() {
         return 'purple';
       case 'RECEPTIONIST':
         return 'info';
+      case 'HOUSEKEEPER':
+        return 'blue';
       case 'ACCOUNTANT':
         return 'success';
       default:
@@ -168,94 +217,92 @@ export default function StaffPage() {
         </div>
 
         {/* Stats Cards */}
-        {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardBody className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      Total Personnel
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                      {stats.total?.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center">
-                      <TrendingUp className="w-3 h-3 mr-1" />
-                      +8% ce mois
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg">
-                    <Users className="w-7 h-7 text-white" />
-                  </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardBody className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Total Personnel
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    {computedStats.total?.toLocaleString() || 0}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center">
+                    <TrendingUp className="w-3 h-3 mr-1" />
+                    {computedStats.total > 0 ? `${computedStats.total} membres` : 'Aucun membre'}
+                  </p>
                 </div>
-              </CardBody>
-            </Card>
+                <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg">
+                  <Users className="w-7 h-7 text-white" />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
 
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardBody className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      Personnel Actif
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                      {stats.active?.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      En service
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg">
-                    <UserCheck className="w-7 h-7 text-white" />
-                  </div>
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardBody className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Femme de Ménage
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    {computedStats.byRole?.HOUSEKEEPER?.toLocaleString() || 0}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    {computedStats.inactive ? `${computedStats.inactive} inactifs` : 'En service'}
+                  </p>
                 </div>
-              </CardBody>
-            </Card>
+                <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg">
+                  <UserCheck className="w-7 h-7 text-white" />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
 
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardBody className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      Administrateurs
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                      {stats.byRole?.ADMIN?.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                      Gestion système
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg">
-                    <Shield className="w-7 h-7 text-white" />
-                  </div>
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardBody className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Administrateurs
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    {computedStats.byRole?.ADMIN?.toLocaleString() || 0}
+                  </p>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    Gestion système
+                  </p>
                 </div>
-              </CardBody>
-            </Card>
+                <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg">
+                  <Shield className="w-7 h-7 text-white" />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
 
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardBody className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      Réceptionnistes
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                      {stats.byRole?.RECEPTIONIST?.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                      Service client
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg">
-                    <Briefcase className="w-7 h-7 text-white" />
-                  </div>
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardBody className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Réceptionnistes
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    {computedStats.byRole?.RECEPTIONIST?.toLocaleString() || 0}
+                  </p>
+                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                    Service client
+                  </p>
                 </div>
-              </CardBody>
-            </Card>
-          </div>
-        )}
+                <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg">
+                  <Briefcase className="w-7 h-7 text-white" />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
 
         {/* Filters */}
         <Card>
@@ -313,7 +360,7 @@ export default function StaffPage() {
                   Liste du Personnel
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {filteredStaff.length} affichés sur {stats?.total || staffMembers.length} membres au total
+                  {filteredStaff.length} affichés sur {computedStats.total || staffMembers.length} membres au total
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -321,7 +368,7 @@ export default function StaffPage() {
                   {filteredStaff.length} affichés
                 </Badge>
                 <Badge variant="primary" className="text-sm px-3 py-1">
-                  {stats?.total || staffMembers.length} total
+                  {computedStats.total || staffMembers.length} total
                 </Badge>
               </div>
             </div>
@@ -635,14 +682,14 @@ export default function StaffPage() {
           title="Détails du Membre du Personnel"
           size="lg"
         >
-          {selectedStaff && (
+          {selectedStaff ? (
             <div className="space-y-6">
               {/* Avatar & Basic Info */}
               <div className="flex items-center gap-6 pb-6 border-b border-gray-200 dark:border-gray-700">
                 <div className="relative">
                   <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
                     <span className="text-white font-bold text-3xl">
-                      {getInitials(selectedStaff.firstName, selectedStaff.lastName)}
+                      {selectedStaff.firstName && selectedStaff.lastName ? getInitials(selectedStaff.firstName, selectedStaff.lastName) : 'NA'}
                     </span>
                   </div>
                   {selectedStaff.isActive && (
@@ -654,11 +701,13 @@ export default function StaffPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                      {selectedStaff.firstName} {selectedStaff.lastName}
+                      {selectedStaff.firstName || 'N/A'} {selectedStaff.lastName || ''}
                     </h3>
-                    <Badge variant={getRoleColor(selectedStaff.role)} className="text-sm px-3 py-1">
-                      {getRoleLabel(selectedStaff.role)}
-                    </Badge>
+                    {selectedStaff.role && (
+                      <Badge variant={getRoleColor(selectedStaff.role)} className="text-sm px-3 py-1">
+                        {getRoleLabel(selectedStaff.role)}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <div className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -679,15 +728,17 @@ export default function StaffPage() {
                   Informations Personnelles
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Mail className="w-4 h-4 text-gray-500" />
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Email</p>
+                  {selectedStaff.email && (
+                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Mail className="w-4 h-4 text-gray-500" />
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Email</p>
+                      </div>
+                      <p className="text-base font-semibold text-gray-900 dark:text-gray-100 ml-6">
+                        {selectedStaff.email}
+                      </p>
                     </div>
-                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100 ml-6">
-                      {selectedStaff.email}
-                    </p>
-                  </div>
+                  )}
 
                   {selectedStaff.phone && (
                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
@@ -710,12 +761,14 @@ export default function StaffPage() {
                   Informations Professionnelles
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
-                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Rôle</p>
-                    <p className="text-base font-semibold text-purple-900 dark:text-purple-100">
-                      {getRoleLabel(selectedStaff.role)}
-                    </p>
-                  </div>
+                  {selectedStaff.role && (
+                    <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
+                      <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Rôle</p>
+                      <p className="text-base font-semibold text-purple-900 dark:text-purple-100">
+                        {getRoleLabel(selectedStaff.role)}
+                      </p>
+                    </div>
+                  )}
 
                   {selectedStaff.department && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
@@ -726,23 +779,23 @@ export default function StaffPage() {
                     </div>
                   )}
 
-                  {selectedStaff.salary ? (
+                  {selectedStaff.salary && selectedStaff.salary > 0 && (
                     <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                       <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-1">Salaire Mensuel</p>
                       <p className="text-base font-semibold text-green-900 dark:text-green-100">
                         ${selectedStaff.salary.toLocaleString()}
                       </p>
                     </div>
-                  ) : null}
+                  )}
 
-                  {selectedStaff.hourlyRate ? (
+                  {selectedStaff.hourlyRate && selectedStaff.hourlyRate > 0 && (
                     <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                       <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-1">Salaire Horaire</p>
                       <p className="text-base font-semibold text-green-900 dark:text-green-100">
                         ${selectedStaff.hourlyRate.toLocaleString()}/h
                       </p>
                     </div>
-                  ) : null}
+                  )}
 
                   {selectedStaff.shift && (
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4">
@@ -764,7 +817,7 @@ export default function StaffPage() {
                         <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Date d'embauche</p>
                       </div>
                       <p className="text-base font-semibold text-gray-900 dark:text-gray-100 ml-6">
-                        {formatDate(selectedStaff.hireDate || selectedStaff.createdAt)}
+                        {selectedStaff.hireDate ? formatDate(selectedStaff.hireDate) : selectedStaff.createdAt ? formatDate(selectedStaff.createdAt) : 'N/A'}
                       </p>
                     </div>
                   )}
@@ -822,17 +875,21 @@ export default function StaffPage() {
                   <div>
                     <p className="text-gray-600 dark:text-gray-400">ID</p>
                     <p className="font-mono text-xs text-gray-900 dark:text-gray-100 break-all">
-                      {selectedStaff.id}
+                      {selectedStaff.id || 'N/A'}
                     </p>
                   </div>
                   <div>
                     <p className="text-gray-600 dark:text-gray-400">Dernière mise à jour</p>
                     <p className="text-gray-900 dark:text-gray-100">
-                      {formatDate(selectedStaff.updatedAt)}
+                      {selectedStaff.updatedAt ? formatDate(selectedStaff.updatedAt) : 'N/A'}
                     </p>
                   </div>
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-600 dark:text-gray-400">Aucune information disponible</p>
             </div>
           )}
 

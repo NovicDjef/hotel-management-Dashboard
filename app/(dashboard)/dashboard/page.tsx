@@ -35,19 +35,29 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { fetchDashboardStats } from '@/store/slices/dashboardSlice';
+import { fetchDashboardStats, fetchTotalStaff, fetchTotalGuests, fetchTotalRevenue, fetchReservationsStats } from '@/store/slices/dashboardSlice';
 import type { DashboardStats } from '@/lib/types';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
 export default function DashboardPage() {
   const dispatch = useAppDispatch();
-  const { stats, isLoading } = useAppSelector((state) => state.dashboard);
+  const { stats, totalStaff, totalGuests, totalRevenue, reservationsStats, isLoading } = useAppSelector((state) => state.dashboard);
 
   useEffect(() => {
+    console.log('📊 DASHBOARD PAGE - Loading all statistics...');
     dispatch(fetchDashboardStats());
+    dispatch(fetchTotalStaff());
+    dispatch(fetchTotalGuests());
+    dispatch(fetchTotalRevenue());
+    dispatch(fetchReservationsStats());
   }, [dispatch]);
 
+  // Log des stats pour debug
+  useEffect(() => {
+    console.log('📊 DASHBOARD PAGE - Stats:', { stats, totalStaff, totalGuests, totalRevenue, reservationsStats });
+  }, [stats, totalStaff, totalGuests, totalRevenue, reservationsStats]);
+  console.log('📊 DASHBOARD PAGE - totalGuests:', totalGuests)  ;
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -71,6 +81,8 @@ export default function DashboardPage() {
     return Minus;
   };
 
+  console.log('totalStaff:', totalStaff);
+
   const getTrendColor = (change?: number) => {
     if (!change) return 'text-gray-500';
     if (change > 0) return 'text-green-600';
@@ -90,12 +102,12 @@ export default function DashboardPage() {
     },
     {
       label: 'Revenus du Mois',
-      value: `$${stats?.stats?.revenue?.month?.toLocaleString() || 0}`,
+      value: `$${totalRevenue?.thisMonth?.toLocaleString() || stats?.stats?.revenue?.month?.toLocaleString() || 0}`,
       icon: TrendingUp,
       color: 'text-blue-600',
       bg: 'bg-blue-50 dark:bg-blue-900/20',
-      changeLabel: 'revenu moyen',
-      subValue: `$${stats?.stats?.revenue?.average?.toLocaleString() || 0}`,
+      changeLabel: 'total de tous les temps',
+      subValue: `$${totalRevenue?.total?.toLocaleString() || 0}`,
     },
     {
       label: "Taux d'Occupation",
@@ -107,29 +119,31 @@ export default function DashboardPage() {
       subValue: `${stats?.stats?.occupancy?.occupiedRooms || 0}/${stats?.stats?.occupancy?.totalRooms || 0}`,
     },
     {
-      label: 'Réservations Totales',
-      value: stats?.stats?.reservations?.total || 0,
-      icon: CalendarCheck,
-      color: 'text-orange-600',
-      bg: 'bg-orange-50 dark:bg-orange-900/20',
-      changeLabel: 'confirmées',
-      subValue: stats?.stats?.reservations?.confirmed || 0,
+      label: 'Total Personnel',
+      value: totalStaff?.total || 0,
+      icon: UserCheck,
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-50 dark:bg-indigo-900/20',
+      changeLabel: 'actifs',
+      subValue: `${totalStaff?.active || 0} actifs / ${totalStaff?.inactive || 0} inactifs`,
     },
     {
-      label: 'Nouveaux Clients (Mois)',
-      value: stats?.stats?.clients?.newClientsMonth || 0,
+      label: 'Total Clients',
+      value: totalGuests?.total || 0,
       icon: Users,
       color: 'text-cyan-600',
       bg: 'bg-cyan-50 dark:bg-cyan-900/20',
-      changeLabel: 'cette semaine',
-      subValue: stats?.stats?.clients?.newClientsWeek || 0,
+      changeLabel: 'avec réservations',
+      subValue: `${totalGuests?.withReservations || 0} clients`,
     },
     {
-      label: 'Réservations en Attente',
-      value: stats?.stats?.reservations?.pending || 0,
-      icon: ClipboardList,
-      color: 'text-red-600',
-      bg: 'bg-red-50 dark:bg-red-900/20',
+      label: 'Réservations Totales',
+      value: reservationsStats?.total || stats?.stats?.reservations?.total || 0,
+      icon: CalendarCheck,
+      color: 'text-orange-600',
+      bg: 'bg-orange-50 dark:bg-orange-900/20',
+      changeLabel: 'confirmées / en attente',
+      subValue: `${reservationsStats?.confirmed || 0} / ${reservationsStats?.pending || 0}`,
     },
   ];
 
@@ -166,11 +180,11 @@ export default function DashboardPage() {
     },
     {
       label: 'Annulations du Mois',
-      value: stats?.stats?.reservations?.cancelledThisMonth || 0,
+      value: reservationsStats?.cancelledThisMonth || stats?.stats?.reservations?.cancelledThisMonth || 0,
       icon: UserX,
       color: 'text-rose-600',
       bg: 'bg-rose-50 dark:bg-rose-900/20',
-      subtitle: `${stats?.stats?.reservations?.cancelled || 0} total`,
+      subtitle: `${reservationsStats?.cancelled || stats?.stats?.reservations?.cancelled || 0} total`,
     },
   ];
 
