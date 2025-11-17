@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
 import { Card, CardBody, CardHeader, Button, Input, Badge, Modal, ModalFooter, Select } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
@@ -19,8 +19,10 @@ import {
   Calendar,
   TrendingUp,
   UserCog,
+  RefreshCw,
 } from 'lucide-react';
 import { useClientDate } from '../../../hooks/useClientDate';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 export default function StaffPage() {
   const dispatch = useAppDispatch();
@@ -101,6 +103,19 @@ export default function StaffPage() {
     dispatch(fetchStaff(filters));
     dispatch(fetchStaffStats());
   }, [dispatch, filters]);
+
+  // Fonction de rafraîchissement automatique
+  const refreshData = useCallback(() => {
+    dispatch(fetchStaff(filters));
+    dispatch(fetchStaffStats());
+  }, [dispatch, filters]);
+
+  // Rafraîchissement automatique toutes les 30 secondes
+  const { isRefreshing, lastRefresh } = useAutoRefresh(refreshData, {
+    interval: 30000, // 30 secondes
+    enabled: true,
+    pauseWhenHidden: true,
+  });
 
   // Log computed stats pour debug
   useEffect(() => {
@@ -210,10 +225,28 @@ export default function StaffPage() {
               Gérez votre équipe et leurs rôles
             </p>
           </div>
-          <Button variant="primary" className="w-full md:w-auto" onClick={() => setShowCreateModal(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Nouveau Membre
-          </Button>
+
+          <div className="flex items-center gap-4">
+            {/* Indicateur de rafraîchissement automatique */}
+            <div className="flex items-center gap-2 text-sm">
+              {isRefreshing && (
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span className="hidden sm:inline">Mise à jour...</span>
+                </div>
+              )}
+              {!isRefreshing && lastRefresh && (
+                <div className="text-gray-500 dark:text-gray-400 text-xs hidden sm:block">
+                  Màj: {lastRefresh.toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+
+            <Button variant="primary" className="w-full md:w-auto" onClick={() => setShowCreateModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nouveau Membre
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}

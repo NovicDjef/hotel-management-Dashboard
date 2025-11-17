@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { DashboardLayout } from '../../components/layouts/DashboardLayout';
 import { Card, CardBody, CardHeader } from '../../components/ui';
 import {
@@ -18,6 +18,7 @@ import {
   CreditCard,
   UserCheck,
   UserX,
+  RefreshCw,
 } from 'lucide-react';
 import {
   LineChart,
@@ -37,6 +38,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchDashboardStats, fetchTotalStaff, fetchTotalGuests, fetchTotalRevenue, fetchReservationsStats } from '@/store/slices/dashboardSlice';
 import type { DashboardStats } from '@/lib/types';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
@@ -44,7 +46,8 @@ export default function DashboardPage() {
   const dispatch = useAppDispatch();
   const { stats, totalStaff, totalGuests, totalRevenue, reservationsStats, isLoading } = useAppSelector((state) => state.dashboard);
 
-  useEffect(() => {
+  // Fonction de rafraîchissement des données
+  const loadAllData = useCallback(() => {
     console.log('📊 DASHBOARD PAGE - Loading all statistics...');
     dispatch(fetchDashboardStats());
     dispatch(fetchTotalStaff());
@@ -52,6 +55,18 @@ export default function DashboardPage() {
     dispatch(fetchTotalRevenue());
     dispatch(fetchReservationsStats());
   }, [dispatch]);
+
+  // Chargement initial
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
+
+  // Rafraîchissement automatique toutes les 30 secondes
+  const { isRefreshing, lastRefresh } = useAutoRefresh(loadAllData, {
+    interval: 30000, // 30 secondes
+    enabled: true,
+    pauseWhenHidden: true,
+  });
 
   // Log des stats pour debug
   useEffect(() => {
@@ -192,13 +207,30 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
-            Dashboard
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Welcome back! Here's what's happening today.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
+              Dashboard
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Welcome back! Here's what's happening today.
+            </p>
+          </div>
+
+          {/* Indicateur de rafraîchissement automatique */}
+          <div className="flex items-center gap-2 text-sm">
+            {isRefreshing && (
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Mise à jour...</span>
+              </div>
+            )}
+            {!isRefreshing && lastRefresh && (
+              <div className="text-gray-500 dark:text-gray-400 text-xs">
+                Dernière mise à jour: {lastRefresh.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards Principales */}

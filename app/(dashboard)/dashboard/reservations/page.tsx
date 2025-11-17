@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
 import {
   Card,
@@ -30,11 +30,13 @@ import {
   Download,
   Edit,
   Printer,
+  RefreshCw,
 } from 'lucide-react';
 import { reservationService, roomService } from '@/lib/api/services';
 import type { Reservation, ReservationStatus, RoomTypeInventory } from '@/lib/types';
 import { format } from 'date-fns';
 import { useClientDate } from '@/hooks/useClientDate';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
@@ -148,6 +150,19 @@ export default function ReservationsPage() {
   useEffect(() => {
     loadRoomTypes();
   }, []);
+
+  // Fonction de rafraîchissement automatique
+  const refreshData = useCallback(() => {
+    loadReservations();
+    // Ne pas recharger les room types à chaque fois, seulement les réservations
+  }, [filters]);
+
+  // Rafraîchissement automatique toutes les 30 secondes
+  const { isRefreshing, lastRefresh } = useAutoRefresh(refreshData, {
+    interval: 30000, // 30 secondes
+    enabled: true,
+    pauseWhenHidden: true,
+  });
 
   // Vérifier la disponibilité quand les dates changent
   useEffect(() => {
@@ -940,12 +955,30 @@ export default function ReservationsPage() {
               Manage hotel reservations and bookings
             </p>
           </div>
-          <Button
-            leftIcon={<Plus className="w-4 h-4" />}
-            onClick={handleOpenCreateModal}
-          >
-            New Reservation
-          </Button>
+
+          <div className="flex items-center gap-4">
+            {/* Indicateur de rafraîchissement automatique */}
+            <div className="flex items-center gap-2 text-sm">
+              {isRefreshing && (
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span className="hidden sm:inline">Mise à jour...</span>
+                </div>
+              )}
+              {!isRefreshing && lastRefresh && (
+                <div className="text-gray-500 dark:text-gray-400 text-xs hidden sm:block">
+                  Màj: {lastRefresh.toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+
+            <Button
+              leftIcon={<Plus className="w-4 h-4" />}
+              onClick={handleOpenCreateModal}
+            >
+              New Reservation
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
 import {
   Card,
@@ -19,9 +19,10 @@ import {
   Modal,
   ModalFooter,
 } from '../../../components/ui';
-import { Search, Plus, Edit, Trash2, Bed } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Bed, RefreshCw } from 'lucide-react';
 import { roomService } from '@/lib/api/services';
 import type { RoomTypeInventory, RoomType } from '@/lib/types';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 const getRoomTypeBadge = (roomType: RoomType) => {
   const variants: Record<string, 'info' | 'success' | 'warning' | 'danger' | 'default'> = {
@@ -91,11 +92,25 @@ export default function RoomsPage() {
     loadRoomStats();
   }, [filters]);
 
+  // Fonction de rafraîchissement automatique
+  const refreshData = useCallback(() => {
+    loadRooms();
+    loadRoomStats();
+  }, [filters]);
+
+  // Rafraîchissement automatique toutes les 30 secondes
+  const { isRefreshing, lastRefresh } = useAutoRefresh(refreshData, {
+    interval: 30000, // 30 secondes
+    enabled: true,
+    pauseWhenHidden: true,
+  });
+
   const loadRoomStats = async () => {
     try {
       const stats = await roomService.getStats();
       console.log('📊 Room stats loaded in component:', stats);
-      setRoomStats(stats);
+      // Extraire les données depuis la propriété 'data' si elle existe
+      setRoomStats(stats.data || stats);
     } catch (error) {
       console.error('❌ Failed to load room stats:', error);
     }
@@ -226,12 +241,30 @@ export default function RoomsPage() {
               Manage hotel rooms and inventory
             </p>
           </div>
-          <Button
-            leftIcon={<Plus className="w-4 h-4" />}
-            onClick={() => setShowAddModal(true)}
-          >
-            Add Room Type
-          </Button>
+
+          <div className="flex items-center gap-4">
+            {/* Indicateur de rafraîchissement automatique */}
+            <div className="flex items-center gap-2 text-sm">
+              {isRefreshing && (
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span className="hidden sm:inline">Mise à jour...</span>
+                </div>
+              )}
+              {!isRefreshing && lastRefresh && (
+                <div className="text-gray-500 dark:text-gray-400 text-xs hidden sm:block">
+                  Màj: {lastRefresh.toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+
+            <Button
+              leftIcon={<Plus className="w-4 h-4" />}
+              onClick={() => setShowAddModal(true)}
+            >
+              Add Room Type
+            </Button>
+          </div>
         </div>
 
         {/* Statistiques des chambres par type */}
