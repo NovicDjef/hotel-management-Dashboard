@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
 import {
   Card,
@@ -116,10 +116,30 @@ export default function ReservationsPage() {
     limit: 10,
   });
 
+  // ✨ Filtre spécial pour les réservations nécessitant une attention
+  const [showNeedsAttention, setShowNeedsAttention] = useState(false);
+
   const [pagination, setPagination] = useState({
     total: 0,
     totalPages: 0,
   });
+
+  // ✨ Calculer les réservations nécessitant une attention et les filtrer
+  const filteredReservations = useMemo(() => {
+    if (!showNeedsAttention) return reservations;
+
+    return reservations.filter(r =>
+      r.status === 'CONFIRMED' &&
+      !r.roomId
+    );
+  }, [reservations, showNeedsAttention]);
+
+  const needsAttentionCount = useMemo(() => {
+    return reservations.filter(r =>
+      r.status === 'CONFIRMED' &&
+      !r.roomId
+    ).length;
+  }, [reservations]);
 
   useEffect(() => {
     loadReservations();
@@ -380,8 +400,55 @@ export default function ReservationsPage() {
         }
       }
 
-      await reservationService.create(newReservation);
-      alert('✅ Réservation créée avec succès!');
+      // Créer la réservation
+      const createdReservation = await reservationService.create(newReservation);
+      console.log('✅ Réservation créée:', createdReservation);
+
+      // 🤖 ATTRIBUTION AUTOMATIQUE DE CHAMBRE
+      try {
+        console.log('🤖 AUTO-ASSIGN - Tentative d\'attribution automatique de chambre...');
+
+        // Récupérer les chambres disponibles du bon type
+        const availableRooms = await roomService.getAvailableForAssignment({
+          roomType: newReservation.roomType,
+          checkInDate: newReservation.checkInDate,
+          checkOutDate: newReservation.checkOutDate,
+        });
+
+        console.log('🔍 AUTO-ASSIGN - Chambres disponibles:', availableRooms);
+
+        // Extraire le tableau de chambres (gérer différents formats de réponse)
+        let rooms: any[] = [];
+        if (Array.isArray(availableRooms)) {
+          rooms = availableRooms;
+        } else if (availableRooms?.data && Array.isArray(availableRooms.data)) {
+          rooms = availableRooms.data;
+        } else if (availableRooms?.availableRooms && Array.isArray(availableRooms.availableRooms)) {
+          rooms = availableRooms.availableRooms;
+        }
+
+        // Si des chambres sont disponibles, attribuer la première
+        if (rooms && rooms.length > 0) {
+          const roomToAssign = rooms[0];
+          console.log('🏨 AUTO-ASSIGN - Attribution de la chambre:', roomToAssign.roomNumber);
+
+          await roomService.assignToReservation({
+            reservationId: createdReservation.id,
+            roomId: roomToAssign.id,
+          });
+
+          console.log('✅ AUTO-ASSIGN - Chambre attribuée automatiquement!');
+          alert(`✅ Réservation créée avec succès!\n🏨 Chambre ${roomToAssign.roomNumber} attribuée automatiquement.`);
+        } else {
+          console.log('⚠️ AUTO-ASSIGN - Aucune chambre disponible pour attribution automatique');
+          alert('✅ Réservation créée avec succès!\n⚠️ Aucune chambre disponible - Attribution manuelle requise.');
+        }
+      } catch (autoAssignError) {
+        console.error('❌ AUTO-ASSIGN - Erreur lors de l\'attribution automatique:', autoAssignError);
+        // Ne pas bloquer le processus si l'attribution automatique échoue
+        alert('✅ Réservation créée avec succès!\n⚠️ L\'attribution automatique a échoué - Veuillez attribuer une chambre manuellement.');
+      }
+
       setShowCreateModal(false);
       setNewReservation({
         guestEmail: '',
@@ -763,15 +830,39 @@ export default function ReservationsPage() {
         checkOutDate: reservation.checkOutDate,
       });
 
-      const rooms = await roomService.getAvailableForAssignment({
+      // Formater les dates au format YYYY-MM-DD pour l'API
+      const formatDate = (date: Date | string) => {
+        const d = new Date(date);
+        return d.toISOString().split('T')[0]; // "2025-10-30"
+      };
+
+      const response = await roomService.getAvailableForAssignment({
         roomType: reservation.roomType,
-        checkInDate: reservation.checkInDate.toString(),
-        checkOutDate: reservation.checkOutDate.toString(),
+        checkInDate: formatDate(reservation.checkInDate),
+        checkOutDate: formatDate(reservation.checkOutDate),
         hotelId: reservation.hotelId,
       });
 
-      console.log('✅ Available rooms loaded:', rooms);
-      setAvailableRooms(rooms || []);
+      console.log('✅ Available rooms response:', response);
+
+      // Gérer différents formats de réponse API
+      let rooms: any[] = [];
+      if (Array.isArray(response)) {
+        // Format: [...]
+        rooms = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        // Format: { data: [...] }
+        rooms = response.data;
+      } else if (response?.availableRooms && Array.isArray(response.availableRooms)) {
+        // Format: { availableRooms: [...] }
+        rooms = response.availableRooms;
+      } else if (response?.data?.availableRooms && Array.isArray(response.data.availableRooms)) {
+        // Format: { data: { availableRooms: [...] } }
+        rooms = response.data.availableRooms;
+      }
+
+      console.log('✅ Available rooms extracted:', rooms);
+      setAvailableRooms(rooms);
     } catch (error: any) {
       console.error('❌ Error loading available rooms:', error);
       alert(`Erreur lors du chargement des chambres: ${error.message || 'Erreur inconnue'}`);
@@ -861,6 +952,34 @@ export default function ReservationsPage() {
         <Card>
           <CardBody>
             <div className="space-y-3">
+              {/* ✨ Bouton Action Requise */}
+              {needsAttentionCount > 0 && (
+                <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <div>
+                      <p className="font-semibold text-red-900 dark:text-red-100">
+                        {needsAttentionCount} {needsAttentionCount === 1 ? 'réservation nécessite' : 'réservations nécessitent'} une attention
+                      </p>
+                      <p className="text-xs text-red-700 dark:text-red-300">
+                        Réservation{needsAttentionCount > 1 ? 's' : ''} confirmée{needsAttentionCount > 1 ? 's' : ''} sans chambre attribuée
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant={showNeedsAttention ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => setShowNeedsAttention(!showNeedsAttention)}
+                  >
+                    {showNeedsAttention ? 'Voir toutes' : 'Voir uniquement'}
+                  </Button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2">
                   <Input
@@ -907,7 +1026,7 @@ export default function ReservationsPage() {
         <Card>
           <CardHeader>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              All Reservations ({pagination.total})
+              All Reservations ({reservations.length || 0 })
             </h3>
           </CardHeader>
           <CardBody className="p-0">
@@ -929,6 +1048,7 @@ export default function ReservationsPage() {
                     <TableHead>ID</TableHead>
                     <TableHead>Guest</TableHead>
                     <TableHead>Room</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Check-in</TableHead>
                     <TableHead>Check-out</TableHead>
                     <TableHead>Guests</TableHead>
@@ -938,7 +1058,7 @@ export default function ReservationsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reservations.map((reservation) => (
+                  {filteredReservations.map((reservation) => (
                     <TableRow key={reservation.id}>
                       <TableCell className="font-mono text-xs">
                         {reservation.id.slice(0, 8)}
@@ -955,7 +1075,84 @@ export default function ReservationsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        Room {reservation.room?.roomNumber}
+                        {/* 🔑 AFFICHAGE DE L'ATTRIBUTION DE CHAMBRE */}
+                        {reservation.roomId ? (
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 text-green-600">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                              </svg>
+                              <span className="font-semibold">Chambre {reservation.room?.roomNumber}</span>
+                            </div>
+
+                            {/* Badge Auto-attribuée si payé et pas encore checké in */}
+                            {reservation.paymentStatus === 'PAID' && !reservation.checkedInAt && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                </svg>
+                                Auto
+                              </span>
+                            )}
+
+                            {/* Bouton pour retirer l'attribution */}
+                            {reservation.status === 'CONFIRMED' && !reservation.checkedInAt && (
+                              <button
+                                onClick={() => handleUnassignRoom(reservation.id, reservation.roomId)}
+                                className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600"
+                                title="Retirer l'attribution"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 text-orange-500">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                              </svg>
+                              <span className="text-gray-500">Non attribuée</span>
+                            </div>
+
+                            {/* ✨ Bouton d'attribution rapide pour réservations PENDING et CONFIRMED */}
+                            {(reservation.status === 'PENDING' || reservation.status === 'CONFIRMED') && (
+                              <button
+                                onClick={() => handleOpenRoomAssignment(reservation)}
+                                className="inline-flex items-center px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 rounded transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                </svg>
+                                Attribuer
+                              </button>
+                            )}
+
+                            {/* ⚠️ ALERTE : Réservation payée mais sans chambre */}
+                            {reservation.status === 'CONFIRMED' && reservation.paymentStatus === 'PAID' && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                                Action requise
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                          {reservation.roomType}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {reservation.checkInDate ? formatDate(reservation.checkInDate, 'MMM dd, yyyy') : 'N/A'}
@@ -1000,12 +1197,12 @@ export default function ReservationsPage() {
                             </button>
                           )}
 
-                          {/* ✨ Bouton d'attribution de chambre */}
-                          {reservation.status === 'CONFIRMED' && (
+                          {/* ✨ Bouton d'attribution de chambre - Disponible pour PENDING et CONFIRMED */}
+                          {(reservation.status === 'PENDING' || reservation.status === 'CONFIRMED') && (
                             <button
                               onClick={() => handleOpenRoomAssignment(reservation)}
                               className="p-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 rounded text-indigo-600"
-                              title="Attribuer une chambre"
+                              title={reservation.roomId ? "Changer de chambre" : "Attribuer une chambre"}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -1973,9 +2170,16 @@ export default function ReservationsPage() {
 
               {/* Liste des chambres disponibles */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Sélectionnez une chambre disponible
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Sélectionnez une chambre disponible
+                  </label>
+                  {!isLoadingAvailableRooms && availableRooms.length > 0 && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                      {availableRooms.length} {availableRooms.length === 1 ? 'chambre' : 'chambres'}
+                    </span>
+                  )}
+                </div>
 
                 {isLoadingAvailableRooms ? (
                   <div className="text-center py-8">
@@ -1984,15 +2188,20 @@ export default function ReservationsPage() {
                   </div>
                 ) : availableRooms.length === 0 ? (
                   <div className="text-center py-8 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mx-auto mb-3 text-yellow-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
                     <p className="text-yellow-800 dark:text-yellow-200 font-medium">
-                      ⚠️ Aucune chambre disponible
+                      Aucune chambre disponible
                     </p>
                     <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                      Toutes les chambres de type {reservationForAssignment.roomType} sont déjà attribuées pour cette période.
+                      Toutes les chambres {reservationForAssignment.roomType} sont déjà attribuées pour cette période.
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-2">
                     {availableRooms.map((room: any) => (
                       <div
                         key={room.id}

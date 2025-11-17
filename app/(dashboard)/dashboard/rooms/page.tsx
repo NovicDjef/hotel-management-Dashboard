@@ -42,6 +42,7 @@ const getRoomTypeBadge = (roomType: RoomType) => {
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<RoomTypeInventory[]>([]);
+  const [roomStats, setRoomStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,7 +88,18 @@ export default function RoomsPage() {
 
   useEffect(() => {
     loadRooms();
+    loadRoomStats();
   }, [filters]);
+
+  const loadRoomStats = async () => {
+    try {
+      const stats = await roomService.getStats();
+      console.log('📊 Room stats loaded in component:', stats);
+      setRoomStats(stats);
+    } catch (error) {
+      console.error('❌ Failed to load room stats:', error);
+    }
+  };
 
   const loadRooms = async () => {
     try {
@@ -221,6 +233,101 @@ export default function RoomsPage() {
             Add Room Type
           </Button>
         </div>
+
+        {/* Statistiques des chambres par type */}
+        {roomStats && roomStats.byType && roomStats.byType.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {roomStats.byType.map((typeStats: any) => {
+              const total = typeStats.total || 0;
+              const available = typeStats.available || 0;
+              const occupied = typeStats.occupied || 0;
+              const reserved = typeStats.reserved || 0;
+              const maintenance = typeStats.maintenance || 0;
+              const cleaning = typeStats.cleaning || 0;
+              const occupancyRate = parseFloat(typeStats.occupancyRate || '0');
+
+              return (
+                <Card key={typeStats.type} className="hover:shadow-lg transition-shadow">
+                  <CardBody className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                          <Bed className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        {getRoomTypeBadge(typeStats.type as RoomType)}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">Total:</span>
+                        <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{total}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-green-600 dark:text-green-400">Disponibles:</span>
+                        <span className="text-sm font-semibold text-green-600 dark:text-green-400">{available}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-red-600 dark:text-red-400">Occupées:</span>
+                        <span className="text-sm font-semibold text-red-600 dark:text-red-400">{occupied}</span>
+                      </div>
+
+                      {reserved > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-orange-600 dark:text-orange-400">Réservées:</span>
+                          <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">{reserved}</span>
+                        </div>
+                      )}
+
+                      {maintenance > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-purple-600 dark:text-purple-400">Maintenance:</span>
+                          <span className="text-sm font-semibold text-purple-600 dark:text-purple-400">{maintenance}</span>
+                        </div>
+                      )}
+
+                      {cleaning > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-blue-600 dark:text-blue-400">Nettoyage:</span>
+                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{cleaning}</span>
+                        </div>
+                      )}
+
+                      {/* Barre de progression */}
+                      <div className="mt-3">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Taux d'occupation</span>
+                          <span className="text-xs font-medium text-gray-900 dark:text-gray-100">{occupancyRate.toFixed(2)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              occupancyRate >= 80 ? 'bg-red-500' : occupancyRate >= 50 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${occupancyRate}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Card>
+            <CardBody className="text-center py-8">
+              <div className="animate-pulse">
+                <Bed className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 dark:text-gray-400">
+                  Chargement des statistiques...
+                </p>
+              </div>
+            </CardBody>
+          </Card>
+        )}
 
         <Card>
           <CardBody>

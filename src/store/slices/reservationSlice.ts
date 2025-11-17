@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { Reservation, ReservationStats } from '@/lib/types';
-import { reservationService } from '@/lib/api/services';
+import { reservationService, roomService } from '@/lib/api/services';
 
 interface ReservationState {
   reservations: Reservation[];
@@ -185,6 +185,69 @@ export const checkAvailability = createAsyncThunk(
   }
 );
 
+// ✨ Attribution automatique de chambre
+export const autoAssignRoom = createAsyncThunk(
+  'reservations/autoAssignRoom',
+  async (reservation: Reservation, { rejectWithValue }) => {
+    try {
+      console.log('🤖 AUTO-ASSIGN - Starting auto room assignment for reservation:', reservation.id);
+
+      // Si une chambre est déjà attribuée, on skip
+      if (reservation.roomId) {
+        console.log('✅ AUTO-ASSIGN - Room already assigned:', reservation.roomId);
+        return reservation;
+      }
+
+      // Récupérer les chambres disponibles du bon type
+      const availableRooms = await roomService.getAvailableForAssignment({
+        roomType: reservation.roomType,
+        checkInDate: reservation.checkInDate,
+        checkOutDate: reservation.checkOutDate,
+        hotelId: reservation.hotelId,
+      });
+
+      console.log('🔍 AUTO-ASSIGN - Available rooms:', availableRooms);
+
+      // Extraire le tableau de chambres (gérer différents formats de réponse)
+      let rooms: any[] = [];
+      if (Array.isArray(availableRooms)) {
+        rooms = availableRooms;
+      } else if (availableRooms?.data && Array.isArray(availableRooms.data)) {
+        rooms = availableRooms.data;
+      } else if (availableRooms?.availableRooms && Array.isArray(availableRooms.availableRooms)) {
+        rooms = availableRooms.availableRooms;
+      }
+
+      // Si aucune chambre disponible
+      if (!rooms || rooms.length === 0) {
+        console.log('⚠️ AUTO-ASSIGN - No available rooms found');
+        return reservation;
+      }
+
+      // Prendre la première chambre disponible
+      const roomToAssign = rooms[0];
+      console.log('🏨 AUTO-ASSIGN - Assigning room:', roomToAssign.roomNumber);
+
+      // Attribuer la chambre
+      await roomService.assignToReservation({
+        reservationId: reservation.id,
+        roomId: roomToAssign.id,
+      });
+
+      console.log('✅ AUTO-ASSIGN - Room assigned successfully');
+
+      // Récupérer la réservation mise à jour
+      const updatedReservation = await reservationService.getById(reservation.id);
+      return updatedReservation;
+    } catch (error: any) {
+      console.error('❌ AUTO-ASSIGN - Error:', error);
+      // Ne pas rejeter l'erreur pour ne pas bloquer le processus
+      // Juste retourner la réservation telle quelle
+      return reservation;
+    }
+  }
+);
+
 // Slice
 const reservationSlice = createSlice({
   name: 'reservations',
@@ -328,6 +391,17 @@ const reservationSlice = createSlice({
 
     // Confirm Payment
     builder.addCase(confirmPayment.fulfilled, (state, action) => {
+      const index = state.reservations.findIndex((r) => r.id === action.payload.id);
+      if (index !== -1) {
+        state.reservations[index] = action.payload;
+      }
+      if (state.selectedReservation?.id === action.payload.id) {
+        state.selectedReservation = action.payload;
+      }
+    });
+
+    // Auto Assign Room
+    builder.addCase(autoAssignRoom.fulfilled, (state, action) => {
       const index = state.reservations.findIndex((r) => r.id === action.payload.id);
       if (index !== -1) {
         state.reservations[index] = action.payload;

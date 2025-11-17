@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout';
-import { Card, CardBody, CardHeader, Button, Input, Badge, Modal, ModalFooter, Select } from '../../../components/ui';
+import { Card, CardBody, CardHeader, Button, Input, Badge, Modal, ModalFooter, Select, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   fetchSpaCategories,
@@ -14,6 +14,7 @@ import {
   deleteSpaService,
   deleteSpaPackage,
   cancelSpaReservation,
+  updateSpaReservation,
   createSpaService,
 } from '@/store/slices/spaSlice';
 import {
@@ -30,6 +31,7 @@ import {
   DollarSign,
   Users,
   X,
+  CheckCircle,
 } from 'lucide-react';
 import { useClientDate } from '../../../hooks/useClientDate';
 
@@ -58,6 +60,10 @@ export default function SpaPage() {
     prix: '',
     bienfaits: '',
   });
+
+  // Reservation details modal states
+  const [showReservationDetailsModal, setShowReservationDetailsModal] = useState(false);
+  const [selectedReservation, setSelectedReservation] = useState<any>(null);
 
   useEffect(() => {
     // Charger les données avec gestion d'erreur
@@ -110,6 +116,36 @@ export default function SpaPage() {
         alert('Réservation annulée avec succès');
       } catch (error) {
         alert('Erreur lors de l\'annulation');
+      }
+    }
+  };
+
+  const handleViewReservationDetails = (reservation: any) => {
+    setSelectedReservation(reservation);
+    setShowReservationDetailsModal(true);
+  };
+
+  const handleCloseReservationDetails = () => {
+    setSelectedReservation(null);
+    setShowReservationDetailsModal(false);
+  };
+
+  const handleConfirmPayment = async (reservationId: string) => {
+    if (confirm('Êtes-vous sûr de vouloir valider le paiement et confirmer cette réservation?')) {
+      try {
+        await dispatch(updateSpaReservation({
+          id: reservationId,
+          data: { status: 'CONFIRMED' }
+        })).unwrap();
+        alert('✅ Paiement validé et réservation confirmée avec succès!');
+        // Rafraîchir les réservations
+        dispatch(fetchSpaReservations({}));
+        dispatch(fetchSpaStats({}));
+        // Fermer le modal
+        handleCloseReservationDetails();
+      } catch (error) {
+        alert('❌ Erreur lors de la validation du paiement');
+        console.error(error);
       }
     }
   };
@@ -199,17 +235,24 @@ export default function SpaPage() {
       : true;
   });
 
-  const filteredReservations = (Array.isArray(reservations) ? reservations : []).filter((reservation) => {
-    const guestName = reservation.reservation?.guest?.firstName + ' ' + reservation.reservation?.guest?.lastName;
-    const serviceName = reservation.spaService?.nom || reservation.spaService?.name || '';
-    const guestEmail = reservation.reservation?.guest?.email || '';
+  const filteredReservations = (Array.isArray(reservations) ? reservations : [])
+    .filter((reservation) => {
+      const guestName = reservation.reservation?.guest?.firstName + ' ' + reservation.reservation?.guest?.lastName;
+      const serviceName = reservation.spaService?.nom || reservation.spaService?.name || '';
+      const guestEmail = reservation.reservation?.guest?.email || '';
 
-    return searchTerm
-      ? guestName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        guestEmail.toLowerCase().includes(searchTerm.toLowerCase())
-      : true;
-  });
+      return searchTerm
+        ? guestName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          guestEmail.toLowerCase().includes(searchTerm.toLowerCase())
+        : true;
+    })
+    // Trier par date (plus récent en premier)
+    .sort((a, b) => {
+      const dateA = new Date(a.date || a.createdAt).getTime();
+      const dateB = new Date(b.date || b.createdAt).getTime();
+      return dateB - dateA; // Ordre décroissant (plus récent en premier)
+    });
 
   const filteredCertificates = (Array.isArray(certificates) ? certificates : []).filter((cert) =>
     searchTerm
@@ -728,99 +771,134 @@ export default function SpaPage() {
 
                 {/* Reservations Tab */}
                 {activeTab === 'reservations' && (
-                  <div className="space-y-3">
+                  <div className="overflow-x-auto">
                     {filteredReservations.length === 0 ? (
                       <div className="text-center py-12">
                         <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-600 dark:text-gray-400">Aucune réservation trouvée</p>
                       </div>
                     ) : (
-                      filteredReservations.map((reservation) => {
-                        const guest = reservation.reservation?.guest;
-                        const guestName = guest ? `${guest.firstName} ${guest.lastName}` : 'Client inconnu';
-                        const serviceName = reservation.spaService?.nom || reservation.spaService?.name || 'Service inconnu';
-                        const duration = reservation.duree || reservation.duration || 0;
-                        const price = reservation.prix || reservation.totalAmount || 0;
-                        const time = reservation.heure || reservation.time || '';
-                        const nombrePersonnes = reservation.nombrePersonnes || 1;
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Client</TableHead>
+                            <TableHead>Service</TableHead>
+                            <TableHead>Date & Heure</TableHead>
+                            <TableHead>Durée</TableHead>
+                            <TableHead>Personnes</TableHead>
+                            <TableHead>Prix</TableHead>
+                            <TableHead>Statut</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredReservations.map((reservation) => {
+                            const guest = reservation.reservation?.guest;
+                            const guestName = guest ? `${guest.firstName} ${guest.lastName}` : 'Client inconnu';
+                            const serviceName = reservation.spaService?.nom || reservation.spaService?.name || 'Service inconnu';
+                            const duration = reservation.duree || reservation.duration || 0;
+                            const price = reservation.prix || reservation.totalAmount || 0;
+                            const time = reservation.heure || reservation.time || '';
+                            const nombrePersonnes = reservation.nombrePersonnes || 1;
 
-                        return (
-                        <div
-                          key={reservation.id}
-                          className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-600 transition-all duration-200"
-                        >
-                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                  {guestName}
-                                </h3>
-                                <Badge variant={getReservationStatusColor(reservation.status)} className="text-xs">
-                                  {reservation.status}
-                                </Badge>
-                              </div>
-
-                              {/* Service info */}
-                              <div className="mb-3">
-                                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
-                                  {serviceName}
-                                </p>
-                                {guest?.email && (
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {guest.email} • {guest.phone}
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="flex flex-wrap gap-3 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    {isMounted ? formatDate(reservation.date) : reservation.date} à {time}
+                            return (
+                              <TableRow key={reservation.id}>
+                                <TableCell>
+                                  <div>
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                                      {guestName}
+                                    </div>
+                                    {guest?.email && (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        {guest.email}
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                    {serviceName}
                                   </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    {duration} min
-                                  </span>
-                                </div>
-                                {nombrePersonnes > 1 && (
+                                </TableCell>
+                                <TableCell>
                                   <div className="flex items-center gap-2">
-                                    <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                                    <span className="text-gray-700 dark:text-gray-300">
-                                      {nombrePersonnes} personne{nombrePersonnes > 1 ? 's' : ''}
+                                    <Calendar className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                                    <div className="text-sm">
+                                      <div className="text-gray-900 dark:text-gray-100">
+                                        {isMounted ? formatDate(reservation.date) : reservation.date}
+                                      </div>
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        {time}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                                      {duration} min
                                     </span>
                                   </div>
-                                )}
-                                <div className="flex items-center gap-2">
-                                  <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                  <span className="font-semibold text-green-600 dark:text-green-400">
-                                    {price}$
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="primary">
-                                <Eye className="w-4 h-4 mr-1" />
-                                Voir
-                              </Button>
-                              {reservation.status !== 'CANCELLED' && (
-                                <Button
-                                  size="sm"
-                                  variant="danger"
-                                  onClick={() => handleCancelReservation(reservation.id)}
-                                >
-                                  <X className="w-4 h-4 mr-1" />
-                                  Annuler
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        );
-                      })
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                                      {nombrePersonnes}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1">
+                                    <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    <span className="font-semibold text-green-600 dark:text-green-400">
+                                      {price}$
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={getReservationStatusColor(reservation.status)} size="sm">
+                                    {reservation.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="primary"
+                                      onClick={() => handleViewReservationDetails(reservation)}
+                                      title="Voir les détails"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                    {reservation.status === 'PENDING' && (
+                                      <Button
+                                        size="sm"
+                                        variant="success"
+                                        onClick={() => handleConfirmPayment(reservation.id)}
+                                        title="Valider le paiement"
+                                      >
+                                        <CheckCircle className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                    {reservation.status !== 'CANCELLED' && (
+                                      <Button
+                                        size="sm"
+                                        variant="danger"
+                                        onClick={() => handleCancelReservation(reservation.id)}
+                                        title="Annuler"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
                     )}
                   </div>
                 )}
@@ -1015,6 +1093,213 @@ export default function SpaPage() {
             </Button>
           </ModalFooter>
         </Modal>
+
+        {/* Modal Détails de la Réservation */}
+        {showReservationDetailsModal && selectedReservation && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+              {/* Overlay */}
+              <div
+                className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75"
+                onClick={handleCloseReservationDetails}
+              ></div>
+
+              {/* Modal */}
+              <div className="relative inline-block w-full max-w-3xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                      <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        Détails de la Réservation
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        ID: {selectedReservation.id?.substring(0, 8)}...
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCloseReservationDetails}
+                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="space-y-6">
+                  {/* Informations Client et Statut */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Informations Client */}
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        Informations Client
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-gray-600 dark:text-gray-400">Nom:</span>{' '}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {selectedReservation.reservation?.guest?.firstName}{' '}
+                            {selectedReservation.reservation?.guest?.lastName}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 dark:text-gray-400">Email:</span>{' '}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {selectedReservation.reservation?.guest?.email || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 dark:text-gray-400">Téléphone:</span>{' '}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {selectedReservation.reservation?.guest?.phone || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Informations Service */}
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Service Spa
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-gray-600 dark:text-gray-400">Service:</span>{' '}
+                          <span className="font-medium text-purple-600 dark:text-purple-400">
+                            {selectedReservation.spaService?.nom || selectedReservation.spaService?.name || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 dark:text-gray-400">Catégorie:</span>{' '}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {selectedReservation.spaService?.categorie || selectedReservation.spaService?.category || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 dark:text-gray-400">Description:</span>{' '}
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {selectedReservation.spaService?.description || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Détails de la Réservation */}
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-3 flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      Détails de la Réservation
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-blue-700 dark:text-blue-400 mb-1">Date</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {isMounted ? formatDate(selectedReservation.date) : selectedReservation.date}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-blue-700 dark:text-blue-400 mb-1">Heure</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {selectedReservation.heure || selectedReservation.time || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-blue-700 dark:text-blue-400 mb-1">Durée</p>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedReservation.duree || selectedReservation.duration || 0} min
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-blue-700 dark:text-blue-400 mb-1">Personnes</p>
+                        <div className="flex items-center gap-1">
+                          <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedReservation.nombrePersonnes || 1}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Prix et Statut */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-green-700 dark:text-green-400">Prix Total</span>
+                        <div className="flex items-center gap-1">
+                          <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+                          <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                            {selectedReservation.prix || selectedReservation.totalAmount || 0}$
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-400">Statut</span>
+                        <Badge variant={getReservationStatusColor(selectedReservation.status)} size="lg">
+                          {selectedReservation.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes spéciales si disponibles */}
+                  {selectedReservation.notes && (
+                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <h4 className="text-sm font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
+                        Notes Spéciales
+                      </h4>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        {selectedReservation.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-between gap-3">
+                  <Button variant="secondary" onClick={handleCloseReservationDetails}>
+                    Fermer
+                  </Button>
+                  <div className="flex gap-3">
+                    {selectedReservation.status === 'PENDING' && (
+                      <Button
+                        variant="success"
+                        onClick={() => handleConfirmPayment(selectedReservation.id)}
+                        leftIcon={<CheckCircle className="w-4 h-4" />}
+                      >
+                        Valider le Paiement
+                      </Button>
+                    )}
+                    {selectedReservation.status !== 'CANCELLED' && selectedReservation.status !== 'CONFIRMED' && (
+                      <Button
+                        variant="danger"
+                        onClick={() => {
+                          handleCancelReservation(selectedReservation.id);
+                          handleCloseReservationDetails();
+                        }}
+                      >
+                        Annuler la Réservation
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

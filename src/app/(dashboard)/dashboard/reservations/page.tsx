@@ -537,7 +537,7 @@ export default function ReservationsPage() {
         <Card>
           <CardHeader>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              All Reservations ({pagination.total})
+              All Reservations ({reservations.length || 0 })
             </h3>
           </CardHeader>
           <CardBody className="p-0">

@@ -61,8 +61,18 @@ export const roomService = {
   },
 
   getStats: async () => {
-    const response = await api.get<RoomStats>('/rooms/stats');
-    return response.data;
+    const response = await api.get<any>('/rooms/stats');
+    console.log('📊 API Response for /rooms/stats:', response);
+
+    // L'API retourne { success: true, data: { byType: [...] } }
+    // Mais api.get pourrait retourner directement response.data
+    // Gérons les deux cas
+    if (response?.data?.data) {
+      return response.data.data; // Format { data: { data: {...} } }
+    } else if (response?.data) {
+      return response.data; // Format { data: {...} }
+    }
+    return response; // Format direct {...}
   },
 
   getCleaningNeeded: async () => {
