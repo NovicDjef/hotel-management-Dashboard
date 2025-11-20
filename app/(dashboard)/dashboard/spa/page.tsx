@@ -32,8 +32,11 @@ import {
   Users,
   X,
   CheckCircle,
+  Star,
+  Edit,
 } from 'lucide-react';
 import { useClientDate } from '../../../hooks/useClientDate';
+import { spaService } from '@/lib/api/services';
 
 type TabType = 'services' | 'packages' | 'reservations' | 'certificates';
 
@@ -65,6 +68,44 @@ export default function SpaPage() {
   const [showReservationDetailsModal, setShowReservationDetailsModal] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
 
+  // Certificate amounts modal states
+  const [showCertificateAmountsModal, setShowCertificateAmountsModal] = useState(false);
+  const [certificateAmounts, setCertificateAmounts] = useState<any[]>([]);
+  const [showCreateAmountModal, setShowCreateAmountModal] = useState(false);
+  const [newAmount, setNewAmount] = useState({
+    montant: '',
+    label: '',
+    isPopular: false,
+  });
+
+  // Package creation modal states
+  const [showCreatePackageModal, setShowCreatePackageModal] = useState(false);
+  const [newPackage, setNewPackage] = useState({
+    nom: '',
+    description: '',
+    services: [] as string[],
+    prixIndividuel: '',
+    prixDuo: '',
+    economieIndividuel: '',
+    economieDuo: '',
+  });
+
+  // Certificate creation modal states
+  const [showCreateCertificateModal, setShowCreateCertificateModal] = useState(false);
+  const [newCertificate, setNewCertificate] = useState({
+    amount: '',
+    purchasedFor: '',
+    purchasedBy: '',
+  });
+
+  // Details modals states
+  const [showServiceDetailsModal, setShowServiceDetailsModal] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [showPackageDetailsModal, setShowPackageDetailsModal] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [showCertificateDetailsModal, setShowCertificateDetailsModal] = useState(false);
+  const [selectedCertificate, setSelectedCertificate] = useState<any>(null);
+
   useEffect(() => {
     // Charger les données avec gestion d'erreur
     const loadData = async () => {
@@ -77,9 +118,14 @@ export default function SpaPage() {
           dispatch(fetchSpaCertificates({})).unwrap(),
           dispatch(fetchSpaStats({})).unwrap(),
         ]);
+        console.log('✅ SPA - Toutes les données chargées avec succès');
+        console.log('📦 Services:', services.length);
+        console.log('📦 Forfaits:', packages.length);
+        console.log('📦 Réservations:', reservations.length);
+        console.log('🎁 Certificats:', certificates.length);
         setApiAvailable(true);
       } catch (error) {
-        console.log('API Spa non disponible - Mode démonstration activé');
+        console.log('⚠️ API Spa non disponible - Mode démonstration activé');
         setApiAvailable(false);
       }
     };
@@ -206,6 +252,167 @@ export default function SpaPage() {
     }
   };
 
+  // Certificate amounts management
+  const loadCertificateAmounts = async () => {
+    try {
+      const response = await spaService.getCertificateAmounts();
+      console.log('📦 Certificate amounts response:', response);
+      setCertificateAmounts(response.data || response || []);
+    } catch (error) {
+      console.error('Failed to load certificate amounts:', error);
+      alert('Erreur lors du chargement des montants de certificats');
+    }
+  };
+
+  const handleOpenCertificateAmounts = async () => {
+    await loadCertificateAmounts();
+    setShowCertificateAmountsModal(true);
+  };
+
+  const handleCreateCertificateAmount = async () => {
+    if (!newAmount.montant || !newAmount.label) {
+      alert('Veuillez remplir tous les champs requis');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const amountData = {
+        montant: parseFloat(newAmount.montant),
+        label: newAmount.label,
+        isPopular: newAmount.isPopular,
+      };
+
+      await spaService.createCertificateAmount(amountData);
+      alert('Montant de certificat créé avec succès!');
+      setShowCreateAmountModal(false);
+      setNewAmount({ montant: '', label: '', isPopular: false });
+      await loadCertificateAmounts();
+    } catch (error) {
+      alert('Erreur lors de la création du montant');
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteCertificateAmount = async (montant: number) => {
+    if (confirm(`Êtes-vous sûr de vouloir supprimer le certificat de ${montant}$?`)) {
+      try {
+        await spaService.deleteCertificateAmount(montant);
+        alert('Montant supprimé avec succès');
+        await loadCertificateAmounts();
+      } catch (error) {
+        alert('Erreur lors de la suppression');
+        console.error(error);
+      }
+    }
+  };
+
+  // Package management
+  const handleCreatePackage = async () => {
+    if (!newPackage.nom || !newPackage.prixIndividuel) {
+      alert('Veuillez remplir tous les champs requis');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const packageData = {
+        nom: newPackage.nom,
+        description: newPackage.description,
+        services: newPackage.services,
+        prixIndividuel: parseFloat(newPackage.prixIndividuel),
+        prixDuo: newPackage.prixDuo ? parseFloat(newPackage.prixDuo) : undefined,
+        economieIndividuel: newPackage.economieIndividuel ? parseFloat(newPackage.economieIndividuel) : undefined,
+        economieDuo: newPackage.economieDuo ? parseFloat(newPackage.economieDuo) : undefined,
+      };
+
+      await spaService.createPackage(packageData);
+      alert('Forfait créé avec succès!');
+      setShowCreatePackageModal(false);
+      setNewPackage({
+        nom: '',
+        description: '',
+        services: [],
+        prixIndividuel: '',
+        prixDuo: '',
+        economieIndividuel: '',
+        economieDuo: '',
+      });
+      dispatch(fetchSpaPackages({}));
+      dispatch(fetchSpaStats({}));
+    } catch (error) {
+      alert('Erreur lors de la création du forfait');
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Certificate management
+  const handleCreateCertificate = async () => {
+    if (!newCertificate.amount || !newCertificate.purchasedFor) {
+      alert('Veuillez remplir tous les champs requis');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const certificateData = {
+        amount: parseFloat(newCertificate.amount),
+        purchasedFor: newCertificate.purchasedFor,
+        purchasedBy: newCertificate.purchasedBy,
+      };
+
+      await spaService.createCertificate(certificateData);
+      alert('Certificat créé avec succès!');
+      setShowCreateCertificateModal(false);
+      setNewCertificate({
+        amount: '',
+        purchasedFor: '',
+        purchasedBy: '',
+      });
+      dispatch(fetchSpaCertificates({}));
+      dispatch(fetchSpaStats({}));
+    } catch (error) {
+      alert('Erreur lors de la création du certificat');
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // View details handlers
+  const handleViewService = (service: any) => {
+    setSelectedService(service);
+    setShowServiceDetailsModal(true);
+  };
+
+  const handleViewPackage = (pkg: any) => {
+    setSelectedPackage(pkg);
+    setShowPackageDetailsModal(true);
+  };
+
+  const handleViewCertificate = (certificate: any) => {
+    setSelectedCertificate(certificate);
+    setShowCertificateDetailsModal(true);
+  };
+
+  const handleDeleteCertificate = async (code: string) => {
+    if (confirm(`Êtes-vous sûr de vouloir supprimer le certificat ${code}?`)) {
+      try {
+        await spaService.deleteCertificate(code);
+        alert('Certificat supprimé avec succès');
+        dispatch(fetchSpaCertificates({}));
+        dispatch(fetchSpaStats({}));
+      } catch (error) {
+        alert('Erreur lors de la suppression');
+        console.error(error);
+      }
+    }
+  };
+
   const filteredServices = (Array.isArray(services) ? services : []).filter((service) => {
     const serviceName = service.nom || service.name || '';
     const serviceDescription = service.description || '';
@@ -254,12 +461,17 @@ export default function SpaPage() {
       return dateB - dateA; // Ordre décroissant (plus récent en premier)
     });
 
-  const filteredCertificates = (Array.isArray(certificates) ? certificates : []).filter((cert) =>
-    searchTerm
-      ? cert.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cert.purchasedFor?.toLowerCase().includes(searchTerm.toLowerCase())
-      : true
-  );
+  const filteredCertificates = (Array.isArray(certificates) ? certificates : []).filter((cert) => {
+    if (!searchTerm) return true;
+
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      cert.code?.toLowerCase().includes(searchLower) ||
+      cert.purchasedFor?.toLowerCase().includes(searchLower) ||
+      cert.purchasedBy?.toLowerCase().includes(searchLower) ||
+      cert.amount?.toString().includes(searchTerm)
+    );
+  });
 
   const getReservationStatusColor = (status: string): 'success' | 'warning' | 'danger' | 'info' | 'default' => {
     switch (status) {
@@ -302,14 +514,34 @@ export default function SpaPage() {
               Gérez les services, forfaits, réservations et certificats cadeaux
             </p>
           </div>
-          <Button
-            variant="primary"
-            className="w-full md:w-auto"
-            onClick={() => activeTab === 'services' && setShowCreateServiceModal(true)}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Nouveau {activeTab === 'services' ? 'Service' : activeTab === 'packages' ? 'Forfait' : activeTab === 'reservations' ? 'Réservation' : 'Certificat'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              className="w-full md:w-auto"
+              onClick={() => {
+                if (activeTab === 'services') {
+                  setShowCreateServiceModal(true);
+                } else if (activeTab === 'packages') {
+                  setShowCreatePackageModal(true);
+                } else if (activeTab === 'certificates') {
+                  setShowCreateCertificateModal(true);
+                }
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nouveau {activeTab === 'services' ? 'Service' : activeTab === 'packages' ? 'Forfait' : activeTab === 'reservations' ? 'Réservation' : 'Certificat'}
+            </Button>
+            {activeTab === 'certificates' && (
+              <Button
+                variant="secondary"
+                className="w-full md:w-auto"
+                onClick={handleOpenCertificateAmounts}
+              >
+                <Gift className="w-4 h-4 mr-2" />
+                Gérer les Montants
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Message d'information si API non disponible */}
@@ -638,7 +870,11 @@ export default function SpaPage() {
                               )}
                             </div>
                             <div className="flex items-center gap-2">
-                              <Button size="sm" variant="primary">
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => handleViewService(service)}
+                              >
                                 <Eye className="w-4 h-4 mr-1" />
                                 Voir
                               </Button>
@@ -749,7 +985,11 @@ export default function SpaPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Button size="sm" variant="primary">
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => handleViewPackage(pkg)}
+                              >
                                 <Eye className="w-4 h-4 mr-1" />
                                 Voir
                               </Button>
@@ -956,9 +1196,20 @@ export default function SpaPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Button size="sm" variant="primary">
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={() => handleViewCertificate(certificate)}
+                                >
                                   <Eye className="w-4 h-4 mr-1" />
                                   Voir
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => handleDeleteCertificate(certificate.code)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
                             </div>
@@ -1295,6 +1546,635 @@ export default function SpaPage() {
                       </Button>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Gestion des Montants de Certificats */}
+        {showCertificateAmountsModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+              {/* Overlay */}
+              <div
+                className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75"
+                onClick={() => setShowCertificateAmountsModal(false)}
+              ></div>
+
+              {/* Modal */}
+              <div className="relative inline-block w-full max-w-4xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+                      <Gift className="w-6 h-6 text-pink-600 dark:text-pink-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        Montants de Certificats Cadeaux
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Gérez les montants disponibles pour les certificats
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowCertificateAmountsModal(false)}
+                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Button to add new amount */}
+                <div className="mb-4">
+                  <Button
+                    variant="primary"
+                    onClick={() => setShowCreateAmountModal(true)}
+                    className="w-full md:w-auto"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nouveau Montant
+                  </Button>
+                </div>
+
+                {/* Content - List of amounts */}
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  {certificateAmounts.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Gift className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 dark:text-gray-400">Aucun montant configuré</p>
+                    </div>
+                  ) : (
+                    certificateAmounts.map((amount) => (
+                      <div
+                        key={amount.montant}
+                        className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:shadow-lg hover:border-pink-300 dark:hover:border-pink-600 transition-all duration-200"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 flex-1">
+                            {/* Amount */}
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
+                              <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                {amount.montant}$
+                              </span>
+                            </div>
+
+                            {/* Label */}
+                            <div className="flex-1">
+                              <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                {amount.label}
+                              </p>
+                            </div>
+
+                            {/* Popular badge */}
+                            {amount.isPopular && (
+                              <Badge variant="warning" className="flex items-center gap-1">
+                                <Star className="w-3 h-3" />
+                                Populaire
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => handleDeleteCertificateAmount(amount.montant)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                  <Button variant="secondary" onClick={() => setShowCertificateAmountsModal(false)}>
+                    Fermer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Création Nouveau Montant */}
+        <Modal
+          isOpen={showCreateAmountModal}
+          onClose={() => setShowCreateAmountModal(false)}
+          title="Nouveau Montant de Certificat"
+          size="md"
+        >
+          <form className="space-y-4">
+            <Input
+              label="Montant ($)"
+              type="number"
+              value={newAmount.montant}
+              onChange={(e) => setNewAmount({ ...newAmount, montant: e.target.value })}
+              placeholder="Ex: 100"
+              required
+            />
+            <Input
+              label="Label"
+              value={newAmount.label}
+              onChange={(e) => setNewAmount({ ...newAmount, label: e.target.value })}
+              placeholder="Ex: Certificat cadeau 100$"
+              required
+            />
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isPopular"
+                checked={newAmount.isPopular}
+                onChange={(e) => setNewAmount({ ...newAmount, isPopular: e.target.checked })}
+                className="w-4 h-4 text-pink-600 bg-gray-100 border-gray-300 rounded focus:ring-pink-500 dark:focus:ring-pink-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+              />
+              <label htmlFor="isPopular" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Marquer comme populaire
+              </label>
+            </div>
+          </form>
+
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateAmountModal(false)}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateCertificateAmount}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Création...' : 'Créer le Montant'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+
+        {/* Modal Création Forfait */}
+        <Modal
+          isOpen={showCreatePackageModal}
+          onClose={() => setShowCreatePackageModal(false)}
+          title="Nouveau Forfait Spa"
+          size="lg"
+        >
+          <form className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+            <div>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                Informations du Forfait
+              </h4>
+              <div className="space-y-4">
+                <Input
+                  label="Nom du Forfait"
+                  value={newPackage.nom}
+                  onChange={(e) => setNewPackage({ ...newPackage, nom: e.target.value })}
+                  placeholder="Ex: Forfait Détente Complète"
+                  required
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={newPackage.description}
+                    onChange={(e) => setNewPackage({ ...newPackage, description: e.target.value })}
+                    placeholder="Décrivez le forfait..."
+                    rows={3}
+                    className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                Prix
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Prix Individuel ($)"
+                  type="number"
+                  value={newPackage.prixIndividuel}
+                  onChange={(e) => setNewPackage({ ...newPackage, prixIndividuel: e.target.value })}
+                  placeholder="Ex: 150"
+                  required
+                />
+                <Input
+                  label="Économie Individuel ($)"
+                  type="number"
+                  value={newPackage.economieIndividuel}
+                  onChange={(e) => setNewPackage({ ...newPackage, economieIndividuel: e.target.value })}
+                  placeholder="Ex: 20"
+                />
+                <Input
+                  label="Prix Duo ($)"
+                  type="number"
+                  value={newPackage.prixDuo}
+                  onChange={(e) => setNewPackage({ ...newPackage, prixDuo: e.target.value })}
+                  placeholder="Ex: 250"
+                />
+                <Input
+                  label="Économie Duo ($)"
+                  type="number"
+                  value={newPackage.economieDuo}
+                  onChange={(e) => setNewPackage({ ...newPackage, economieDuo: e.target.value })}
+                  placeholder="Ex: 40"
+                />
+              </div>
+            </div>
+          </form>
+
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreatePackageModal(false)}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreatePackage}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Création...' : 'Créer le Forfait'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+
+        {/* Modal Création Certificat */}
+        <Modal
+          isOpen={showCreateCertificateModal}
+          onClose={() => setShowCreateCertificateModal(false)}
+          title="Nouveau Certificat Cadeau"
+          size="md"
+        >
+          <form className="space-y-4">
+            <Input
+              label="Montant ($)"
+              type="number"
+              value={newCertificate.amount}
+              onChange={(e) => setNewCertificate({ ...newCertificate, amount: e.target.value })}
+              placeholder="Ex: 100"
+              required
+            />
+            <Input
+              label="Acheté pour (Destinataire)"
+              value={newCertificate.purchasedFor}
+              onChange={(e) => setNewCertificate({ ...newCertificate, purchasedFor: e.target.value })}
+              placeholder="Ex: Marie Dupont"
+              required
+            />
+            <Input
+              label="Acheté par (Acheteur)"
+              value={newCertificate.purchasedBy}
+              onChange={(e) => setNewCertificate({ ...newCertificate, purchasedBy: e.target.value })}
+              placeholder="Ex: Jean Martin"
+            />
+          </form>
+
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateCertificateModal(false)}
+              disabled={isSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateCertificate}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Création...' : 'Créer le Certificat'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+
+        {/* Modal Détails Service */}
+        {showServiceDetailsModal && selectedService && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+              <div
+                className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75"
+                onClick={() => setShowServiceDetailsModal(false)}
+              ></div>
+
+              <div className="relative inline-block w-full max-w-3xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                      <Sparkles className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        {selectedService.nom || selectedService.name}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {selectedService.categorie || selectedService.category}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowServiceDetailsModal(false)}
+                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Description</h4>
+                    <p className="text-gray-700 dark:text-gray-300">{selectedService.description}</p>
+                  </div>
+
+                  {selectedService.durees && selectedService.durees.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                        Durées et Prix
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {selectedService.durees.map((duration: number) => (
+                          <div key={duration} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                <span className="font-medium text-gray-900 dark:text-gray-100">
+                                  {duration} min
+                                </span>
+                              </div>
+                              {selectedService.prix?.[duration] && (
+                                <div className="flex items-center gap-1">
+                                  <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                  <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                                    {selectedService.prix[duration]}$
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedService.bienfaits && selectedService.bienfaits.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                        Bienfaits
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedService.bienfaits.map((benefit: string, idx: number) => (
+                          <Badge key={idx} variant="info" className="text-sm">
+                            {benefit}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                  <Button variant="secondary" onClick={() => setShowServiceDetailsModal(false)}>
+                    Fermer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Détails Forfait */}
+        {showPackageDetailsModal && selectedPackage && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+              <div
+                className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75"
+                onClick={() => setShowPackageDetailsModal(false)}
+              ></div>
+
+              <div className="relative inline-block w-full max-w-3xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        {selectedPackage.nom || selectedPackage.name}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Forfait Spa
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowPackageDetailsModal(false)}
+                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Description</h4>
+                    <p className="text-gray-700 dark:text-gray-300">{selectedPackage.description}</p>
+                  </div>
+
+                  {selectedPackage.services && selectedPackage.services.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                        Services Inclus
+                      </h4>
+                      <div className="space-y-2">
+                        {selectedPackage.services.map((svc: any) => (
+                          <div key={svc.id} className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <p className="font-medium text-purple-900 dark:text-purple-300">
+                              {svc.service?.nom || svc.service?.name}
+                            </p>
+                            {svc.service?.description && (
+                              <p className="text-sm text-purple-700 dark:text-purple-400 mt-1">
+                                {svc.service.description}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      Tarification
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                        <p className="text-sm text-green-700 dark:text-green-400 mb-2">Prix Individuel</p>
+                        <div className="flex items-center gap-1">
+                          <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
+                          <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                            {selectedPackage.prixIndividuel || selectedPackage.price}$
+                          </span>
+                        </div>
+                        {(selectedPackage.economieIndividuel || selectedPackage.discount) > 0 && (
+                          <Badge variant="warning" className="mt-2">
+                            Économie: {selectedPackage.economieIndividuel || selectedPackage.discount}$
+                          </Badge>
+                        )}
+                      </div>
+
+                      {selectedPackage.prixDuo > 0 && (
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <p className="text-sm text-purple-700 dark:text-purple-400 mb-2">Prix Duo</p>
+                          <div className="flex items-center gap-1">
+                            <Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                            <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                              {selectedPackage.prixDuo}$
+                            </span>
+                          </div>
+                          {selectedPackage.economieDuo > 0 && (
+                            <Badge variant="warning" className="mt-2">
+                              Économie: {selectedPackage.economieDuo}$
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                  <Button variant="secondary" onClick={() => setShowPackageDetailsModal(false)}>
+                    Fermer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Détails Certificat */}
+        {showCertificateDetailsModal && selectedCertificate && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+              <div
+                className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75"
+                onClick={() => setShowCertificateDetailsModal(false)}
+              ></div>
+
+              <div className="relative inline-block w-full max-w-2xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+                      <Gift className="w-6 h-6 text-pink-600 dark:text-pink-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 font-mono">
+                        {selectedCertificate.code}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Certificat Cadeau
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowCertificateDetailsModal(false)}
+                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <p className="text-sm text-green-700 dark:text-green-400 mb-2">Montant</p>
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
+                        <span className="text-3xl font-bold text-green-600 dark:text-green-400">
+                          {selectedCertificate.amount}$
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <p className="text-sm text-gray-700 dark:text-gray-400 mb-2">Statut</p>
+                      {isMounted && (
+                        <Badge variant={getCertificateStatus(selectedCertificate).color} size="lg">
+                          {getCertificateStatus(selectedCertificate).label}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedCertificate.purchasedFor && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Destinataire
+                        </h4>
+                        <p className="text-gray-900 dark:text-gray-100 font-medium">
+                          {selectedCertificate.purchasedFor}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedCertificate.purchasedBy && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Acheté par
+                        </h4>
+                        <p className="text-gray-900 dark:text-gray-100 font-medium">
+                          {selectedCertificate.purchasedBy}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedCertificate.expiresAt && (
+                    <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                        <div>
+                          <p className="text-sm text-orange-700 dark:text-orange-400 font-medium">
+                            Date d'expiration
+                          </p>
+                          <p className="text-orange-900 dark:text-orange-300">
+                            {isMounted ? formatDate(selectedCertificate.expiresAt) : selectedCertificate.expiresAt}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedCertificate.isUsed && selectedCertificate.usedAt && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <p className="text-sm text-blue-700 dark:text-blue-400 font-medium mb-1">
+                        Utilisé le
+                      </p>
+                      <p className="text-blue-900 dark:text-blue-300">
+                        {isMounted ? formatDate(selectedCertificate.usedAt) : selectedCertificate.usedAt}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                  <Button variant="secondary" onClick={() => setShowCertificateDetailsModal(false)}>
+                    Fermer
+                  </Button>
                 </div>
               </div>
             </div>

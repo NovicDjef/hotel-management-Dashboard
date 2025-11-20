@@ -17,7 +17,11 @@ import {
   Phone,
   MapPin,
   Calendar,
-  TrendingUp
+  TrendingUp,
+  User,
+  Briefcase,
+  CreditCard,
+  Globe
 } from 'lucide-react';
 import { useClientDate } from '@/hooks/useClientDate';
 import { guestService } from '@/lib/api/services';
@@ -29,6 +33,8 @@ export default function GuestsPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newGuest, setNewGuest] = useState({
     email: '',
@@ -102,6 +108,17 @@ export default function GuestsPage() {
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  };
+
+  const handleViewGuest = async (guestId: string) => {
+    try {
+      const guestDetails = await guestService.getById(guestId);
+      setSelectedGuest(guestDetails);
+      setShowDetailsModal(true);
+    } catch (error) {
+      console.error('Failed to fetch guest details:', error);
+      alert('Erreur lors du chargement des détails du client');
+    }
   };
 
   return (
@@ -382,6 +399,7 @@ export default function GuestsPage() {
                             size="sm"
                             variant="primary"
                             className="h-full min-w-[100px]"
+                            onClick={() => handleViewGuest(guest.id)}
                           >
                             <Eye className="w-4 h-4 mr-1" />
                             Voir
@@ -550,6 +568,198 @@ export default function GuestsPage() {
             </ModalFooter>
           </form>
         </Modal>
+
+        {/* Guest Details Modal */}
+        {selectedGuest && (
+          <Modal
+            isOpen={showDetailsModal}
+            onClose={() => setShowDetailsModal(false)}
+            title={`Détails du client`}
+            size="xl"
+          >
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+              {/* Header avec Avatar */}
+              <div className="flex items-center gap-4 p-6 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg">
+                <div className="relative">
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-2xl">
+                      {getInitials(selectedGuest.firstName, selectedGuest.lastName)}
+                    </span>
+                  </div>
+                  {selectedGuest.isVIP && (
+                    <div className="absolute -top-1 -right-1 w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center border-2 border-white dark:border-gray-800">
+                      <Star className="w-4 h-4 text-white fill-white" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.firstName} {selectedGuest.lastName}
+                    </h2>
+                    <Badge variant={selectedGuest.isVIP ? 'warning' : 'default'}>
+                      {selectedGuest.isVIP ? 'VIP' : 'Standard'}
+                    </Badge>
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    {selectedGuest.email}
+                  </p>
+                </div>
+              </div>
+
+              {/* Informations Personnelles */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Informations Personnelles
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Phone className="w-4 h-4 text-gray-500" />
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Téléphone</p>
+                    </div>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.phone || 'Non renseigné'}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="w-4 h-4 text-gray-500" />
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Date de naissance</p>
+                    </div>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.dateOfBirth ? formatDate(selectedGuest.dateOfBirth) : 'Non renseigné'}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Globe className="w-4 h-4 text-gray-500" />
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Nationalité</p>
+                    </div>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.nationality || 'Non renseigné'}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="w-4 h-4 text-gray-500" />
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Passeport</p>
+                    </div>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.passportNumber || 'Non renseigné'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Adresse */}
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  Adresse
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Adresse complète</p>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.address || 'Non renseigné'}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Ville</p>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.city || 'Non renseigné'}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Pays</p>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedGuest.country || 'Non renseigné'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Programme de fidélité */}
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Award className="w-5 h-5" />
+                  Programme de Fidélité
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Award className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                      <p className="text-sm font-medium text-purple-700 dark:text-purple-300">Points de fidélité</p>
+                    </div>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                      {selectedGuest.loyaltyPoints || 0}
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <UserCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Statut</p>
+                    </div>
+                    <p className="text-xl font-bold text-blue-900 dark:text-blue-100">
+                      {selectedGuest.isVIP ? 'Client VIP' : 'Client Standard'}
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">Membre depuis</p>
+                    </div>
+                    <p className="text-base font-bold text-green-900 dark:text-green-100">
+                      {formatDate(selectedGuest.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Métadonnées */}
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Briefcase className="w-5 h-5" />
+                  Informations Système
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">ID Client</p>
+                    <p className="text-xs font-mono text-gray-900 dark:text-gray-100 break-all">
+                      {selectedGuest.id}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Dernière mise à jour</p>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {formatDate(selectedGuest.updatedAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <ModalFooter>
+              <Button
+                variant="secondary"
+                onClick={() => setShowDetailsModal(false)}
+              >
+                Fermer
+              </Button>
+            </ModalFooter>
+          </Modal>
+        )}
       </div>
     </DashboardLayout>
   );

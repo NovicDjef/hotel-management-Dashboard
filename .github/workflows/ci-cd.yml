@@ -1,0 +1,175 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  # Job 1: Lint et vérification du code
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: true
+
+  # Job 2: Build de l'application
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-files
+          path: .next/
+          retention-days: 7
+
+  # Job 3: Tests (optionnel - décommentez si vous avez des tests)
+  # test:
+  #   name: Run Tests
+  #   runs-on: ubuntu-latest
+  #   needs: lint
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Setup Node.js
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'npm'
+  #
+  #     - name: Install dependencies
+  #       run: npm ci
+  #
+  #     - name: Run tests
+  #       run: npm test
+  #
+  #     - name: Generate coverage report
+  #       run: npm run test:coverage
+  #
+  #     - name: Upload coverage to Codecov
+  #       uses: codecov/codecov-action@v3
+
+  # Job 4: Déploiement (décommentez selon votre plateforme)
+  # deploy:
+  #   name: Deploy to Production
+  #   runs-on: ubuntu-latest
+  #   needs: [build]
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Download build artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: build-files
+  #         path: .next/
+  #
+  #     # Option 1: Déploiement sur Vercel
+  #     # - name: Deploy to Vercel
+  #     #   uses: amondnet/vercel-action@v25
+  #     #   with:
+  #     #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
+  #     #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+  #     #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+  #     #     vercel-args: '--prod'
+  #
+  #     # Option 2: Déploiement via SSH sur un serveur
+  #     # - name: Deploy to Server via SSH
+  #     #   uses: appleboy/ssh-action@v1.0.0
+  #     #   with:
+  #     #     host: ${{ secrets.SERVER_HOST }}
+  #     #     username: ${{ secrets.SERVER_USERNAME }}
+  #     #     key: ${{ secrets.SERVER_SSH_KEY }}
+  #     #     port: ${{ secrets.SERVER_PORT }}
+  #     #     script: |
+  #     #       cd /var/www/hotel-admin-dashboard
+  #     #       git pull origin main
+  #     #       npm ci
+  #     #       npm run build
+  #     #       pm2 restart hotel-admin-dashboard
+  #
+  #     # Option 3: Déploiement sur AWS S3 + CloudFront
+  #     # - name: Configure AWS credentials
+  #     #   uses: aws-actions/configure-aws-credentials@v4
+  #     #   with:
+  #     #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #     #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #     #     aws-region: us-east-1
+  #     #
+  #     # - name: Deploy to S3
+  #     #   run: |
+  #     #     aws s3 sync out/ s3://${{ secrets.S3_BUCKET }} --delete
+  #     #     aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_ID }} --paths "/*"
+  #
+  #     # Option 4: Déploiement Docker
+  #     # - name: Build and push Docker image
+  #     #   uses: docker/build-push-action@v5
+  #     #   with:
+  #     #     context: .
+  #     #     push: true
+  #     #     tags: ${{ secrets.DOCKER_REGISTRY }}/hotel-admin-dashboard:latest
+  #     #
+  #     # - name: Deploy to Kubernetes
+  #     #   run: kubectl rollout restart deployment/hotel-admin-dashboard
+
+  # Job 5: Notification de succès
+  notify:
+    name: Notify Status
+    runs-on: ubuntu-latest
+    needs: [lint, build]
+    if: always()
+
+    steps:
+      - name: Check build status
+        run: |
+          if [ "${{ needs.build.result }}" == "success" ]; then
+            echo "✅ Build réussi!"
+          else
+            echo "❌ Build échoué!"
+            exit 1
+          fi

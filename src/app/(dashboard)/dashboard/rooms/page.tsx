@@ -19,7 +19,7 @@ import {
   Modal,
   ModalFooter,
 } from '@/components/ui';
-import { Search, Plus, Edit, Trash2, Bed } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Bed, X, Image as ImageIcon, Upload } from 'lucide-react';
 import { roomService } from '@/lib/api/services';
 import type { RoomTypeInventory, RoomType } from '@/lib/types';
 
@@ -71,6 +71,7 @@ export default function RoomsPage() {
     size: 0,
     bedType: '',
     totalRooms: 1,
+    images: [] as string[],
     amenities: {
       wifi: true,
       tv: true,
@@ -84,6 +85,8 @@ export default function RoomsPage() {
       bathrobeSlippers: false,
     },
   });
+
+  const [currentImageUrl, setCurrentImageUrl] = useState('');
 
   useEffect(() => {
     loadRooms();
@@ -171,6 +174,7 @@ export default function RoomsPage() {
         size: 0,
         bedType: '',
         totalRooms: 1,
+        images: [],
         amenities: {
           wifi: true,
           tv: true,
@@ -184,6 +188,7 @@ export default function RoomsPage() {
           bathrobeSlippers: false,
         },
       });
+      setCurrentImageUrl('');
     } catch (error) {
       console.error('Failed to create room type:', error);
       alert('Error creating room type. Please try again.');
@@ -199,6 +204,74 @@ export default function RoomsPage() {
         ...formData.amenities,
         [amenity]: !formData.amenities[amenity as keyof typeof formData.amenities],
       },
+    });
+  };
+
+  const handleAddImage = () => {
+    if (currentImageUrl.trim() !== '') {
+      setFormData({
+        ...formData,
+        images: [...formData.images, currentImageUrl.trim()],
+      });
+      setCurrentImageUrl('');
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setFormData({
+      ...formData,
+      images: formData.images.filter((_, i) => i !== index),
+    });
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const newImages: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      // Vérifier que c'est une image
+      if (!file.type.startsWith('image/')) {
+        alert(`${file.name} n'est pas une image valide`);
+        continue;
+      }
+
+      // Vérifier la taille (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`${file.name} est trop volumineux (max 5MB)`);
+        continue;
+      }
+
+      // Convertir en base64
+      try {
+        const base64 = await convertFileToBase64(file);
+        newImages.push(base64 as string);
+      } catch (error) {
+        console.error('Error converting file:', error);
+        alert(`Erreur lors du traitement de ${file.name}`);
+      }
+    }
+
+    if (newImages.length > 0) {
+      setFormData({
+        ...formData,
+        images: [...formData.images, ...newImages],
+      });
+    }
+
+    // Réinitialiser l'input file
+    event.target.value = '';
+  };
+
+  const convertFileToBase64 = (file: File): Promise<string | ArrayBuffer | null> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
     });
   };
 
@@ -577,6 +650,124 @@ export default function RoomsPage() {
                       </span>
                     </label>
                   ))}
+                </div>
+              </div>
+
+              {/* Section 4: Images */}
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Room Images
+                </h3>
+
+                <div className="space-y-3">
+                  {/* Option 1: Ajouter par URL */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Add by URL
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="url"
+                        value={currentImageUrl}
+                        onChange={(e) => setCurrentImageUrl(e.target.value)}
+                        placeholder="Enter image URL (https://...)"
+                        disabled={isSubmitting}
+                        className="flex-1"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddImage();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleAddImage}
+                        disabled={!currentImageUrl.trim() || isSubmitting}
+                        size="sm"
+                        leftIcon={<Plus className="w-4 h-4" />}
+                      >
+                        Add URL
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Upload depuis l'ordinateur */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Or upload from computer
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="file-upload"
+                        className="flex-1 flex items-center justify-center px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                      >
+                        <Upload className="w-5 h-5 text-gray-400 mr-2" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          Choose images or drag & drop
+                        </span>
+                        <input
+                          id="file-upload"
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleFileUpload}
+                          disabled={isSubmitting}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      PNG, JPG, GIF up to 5MB each. You can select multiple files.
+                    </p>
+                  </div>
+
+                  {/* Liste des images ajoutées */}
+                  {formData.images.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {formData.images.length} image(s) added
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                        {formData.images.map((imageUrl, index) => (
+                          <div
+                            key={index}
+                            className="relative group rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700"
+                          >
+                            <img
+                              src={imageUrl}
+                              alt={`Room image ${index + 1}`}
+                              className="w-full h-32 object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(index)}
+                              disabled={isSubmitting}
+                              className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                              title="Remove image"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                              {imageUrl}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.images.length === 0 && (
+                    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                      <ImageIcon className="w-10 h-10 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                        No images added yet. Enter image URLs above to add them.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

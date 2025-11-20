@@ -600,6 +600,27 @@ export const spaService = {
 
   // ==================== CERTIFICATS CADEAUX ====================
 
+  // Gestion des montants de certificats (amounts)
+  getCertificateAmounts: async () => {
+    const response = await apiService.get('/spa/certificats/amounts');
+    return response.data;
+  },
+
+  createCertificateAmount: async (data: { montant: number; label: string; isPopular: boolean }) => {
+    const response = await apiService.post('/spa/certificats/amounts', data);
+    return response.data;
+  },
+
+  updateCertificateAmount: async (montant: number, data: { label?: string; isPopular?: boolean }) => {
+    const response = await apiService.put(`/spa/certificats/amounts/${montant}`, data);
+    return response.data;
+  },
+
+  deleteCertificateAmount: async (montant: number) => {
+    const response = await apiService.delete(`/spa/certificats/amounts/${montant}`);
+    return response.data;
+  },
+
   // Certificats (publiques)
   getAvailableAmounts: async () => {
     const response = await apiService.get('/spa/certificats/amounts');
@@ -608,7 +629,7 @@ export const spaService = {
 
   // Certificats (admin)
   getAllCertificates: async (params?: any) => {
-    const response = await apiService.get('/spa/certificats/amounts', { params });
+    const response = await apiService.get('/spa/certificats', { params });
     return response.data;
   },
 
@@ -619,6 +640,11 @@ export const spaService = {
 
   createCertificate: async (data: any) => {
     const response = await apiService.post('/spa/certificats', data);
+    return response.data;
+  },
+
+  deleteCertificate: async (code: string) => {
+    const response = await apiService.delete(`/spa/certificats/${code}`);
     return response.data;
   },
 
@@ -791,10 +817,51 @@ export const guestReviewService = {
   },
 };
 
+// ==================== AVIS CLIENTS ====================
+
+export interface Review {
+  id: string;
+  hotelId: string;
+  guestId: string;
+  reservationId?: string;
+  overallRating: number;
+  cleanlinessRating: number;
+  serviceRating: number;
+  locationRating: number;
+  valueRating: number;
+  title: string;
+  comment: string;
+  sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
+  isPublished: boolean;
+  helpfulCount: number;
+  responseText?: string;
+  responseDate?: string;
+  respondedBy?: string;
+  guest?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReviewStats {
+  total: number;
+  published: number;
+  averageRating: {
+    overallRating: number;
+    cleanlinessRating: number;
+    serviceRating: number;
+    locationRating: number;
+    valueRating: number;
+  };
+}
+
 // Routes staff pour gérer les avis
 export const reviewService = {
-  getAll: async (params?: any) => {
-    const response = await apiService.get('/reviews', { params });
+  getAll: async (hotelId: string, params?: any) => {
+    const response = await apiService.get(`/reviews/hotel/${hotelId}`, { params });
     return response.data;
   },
 
@@ -803,8 +870,8 @@ export const reviewService = {
     return response.data;
   },
 
-  getStats: async () => {
-    const response = await apiService.get('/reviews/stats');
+  getStats: async (hotelId: string) => {
+    const response = await apiService.get(`/reviews/hotel/${hotelId}/stats`);
     return response.data;
   },
 
@@ -818,19 +885,19 @@ export const reviewService = {
     return response.data;
   },
 
-  publish: async (id: string) => {
-    const response = await apiService.post(`/reviews/${id}/publish`);
+  updatePublishStatus: async (id: string, isPublished: boolean) => {
+    const response = await apiService.put(`/reviews/${id}`, { isPublished });
     return response.data;
   },
 
-  verify: async (id: string) => {
-    const response = await apiService.post(`/reviews/${id}/verify`);
-    return response.data;
-  },
-
-  respond: async (id: string, response: string) => {
-    const res = await apiService.post(`/reviews/${id}/respond`, { response });
+  respond: async (id: string, responseText: string) => {
+    const res = await apiService.post(`/reviews/${id}/response`, { responseText });
     return res.data;
+  },
+
+  markHelpful: async (id: string, helpful: boolean) => {
+    const response = await apiService.post(`/reviews/${id}/helpful`, { helpful });
+    return response.data;
   },
 };
 
